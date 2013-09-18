@@ -35,11 +35,11 @@ def format_grams(grams):
     to_join = []
     for toks, prob, bow in sorted(grams):
         if bow == None:
-            to_join.append("%s %s" % (prob, " ".join(toks)))
-            #to_join.append("%f %s" % (prob, " ".join(toks)))
+            #to_join.append("%s %s" % (prob, " ".join(toks)))
+            to_join.append("%f %s" % (prob, " ".join(toks)))
         else:
-            to_join.append("%s %s %s" % (prob, " ".join(toks), bow))
-            #to_join.append("%f %s %f" % (prob, " ".join(toks), bow))
+            #to_join.append("%s %s %s" % (prob, " ".join(toks), bow))
+            to_join.append("%f %s %f" % (prob, " ".join(toks), bow))
     return "\n".join(to_join)
 
 def unpack_grams(n, s):
@@ -49,11 +49,11 @@ def unpack_grams(n, s):
         if len(toks) == n:
             raise Exception("line \"%s\" is too short" % e)
         elif len(toks) == n + 1:
-            #retval.append((toks[1:], float(toks[0]), None))
-            retval.append((toks[1:], toks[0], None))
+            retval.append((toks[1:], float(toks[0]), None))
+            #retval.append((toks[1:], toks[0], None))
         elif len(toks) == n + 2:
-            #retval.append((toks[1:-1], float(toks[0]), float(toks[-1])))
-            retval.append((toks[1:-1], toks[0], toks[-1]))
+            retval.append((toks[1:-1], float(toks[0]), float(toks[-1])))
+            #retval.append((toks[1:-1], toks[0], toks[-1]))
     return retval
 
 class Arpabo():
