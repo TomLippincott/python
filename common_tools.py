@@ -7,7 +7,7 @@ import glob
 import cPickle
 import csv
 import tempfile
-import bz2
+#import bz2
 from os.path import basename, splitext
 from math import log, sqrt, pow, pi, e, sinh
 import tarfile
