@@ -13,8 +13,8 @@ from math import log, sqrt, pow, pi, e, sinh
 import tarfile
 #from scipy.special import gamma, gammainc
 #from scipy import sparse
-#from scipy.misc import comb
-#import numpy
+from scipy.misc import comb
+import numpy
 #from rpy2.robjects.conversion import ri2py
 #from rpy2.robjects.numpy2ri import numpy2ri
 from unicodedata import name

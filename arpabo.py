@@ -104,6 +104,8 @@ class Dictionary():
     def __init__(self, file_handle):
         self.entries = {}
         for w, n, p in [re.match(r"^(\S+?)(\(\d+\))? (.*)$", l).groups() for l in file_handle]:
+            if "REJ" in p:
+                continue
             if n:
                 n = int(n[1:-1])
             else:
@@ -116,7 +118,7 @@ class Dictionary():
 
     def add_entries(self, other):
         for w, ps in sorted(other.entries.iteritems()):
-            if w not in self.entries:
+            if w not in self.entries and not w.startswith("<"):
                 self.entries[w] = ps
 
     def get_words(self):
