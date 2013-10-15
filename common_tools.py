@@ -11,9 +11,14 @@ import tempfile
 from os.path import basename, splitext
 from math import log, sqrt, pow, pi, e, sinh
 import tarfile
-#from scipy.special import gamma, gammainc
-#from scipy import sparse
-#from scipy.misc import comb
+try:
+    import numpy
+    from scipy.special import gamma, gammainc
+    from scipy import sparse
+    from scipy.misc import comb
+except:
+    pass
+
 #import numpy
 #from rpy2.robjects.conversion import ri2py
 #from rpy2.robjects.numpy2ri import numpy2ri
@@ -174,6 +179,8 @@ def modified_purity(assignments, gold, mcs=1):
         if num >= mcs:
             correct += num
             total += sum(prevs[key].values())
+    if total == 0:
+        return float(0)
     return float(correct) / float(total)
 
 def harmonic_mean(precision, recall):
