@@ -7,6 +7,7 @@ import glob
 import cPickle
 import csv
 import tempfile
+import math
 #import bz2
 from os.path import basename, splitext
 from math import log, sqrt, pow, pi, e, sinh
@@ -34,6 +35,61 @@ def Exp(lam):
 
 def gamma(x):
     return sqrt(2 * pi / x) * pow((x / e) * sqrt(x * sinh(1.0 / x) + 1.0 / (810 * pow(x, 6))), x)
+
+class Probability():
+
+    def __init__(self, prob=None, logprob=None, log2prob=None, log10prob=None, neglogprob=None, neglog2prob=None, neglog10prob=None):
+        vals = [prob, logprob, log2prob, log10prob, neglogprob, neglog2prob, neglog10prob]
+        if all([x == None for x in vals]):
+            raise Exception("no value was specified for Probability object!")
+        elif len([x for x in vals if x != None]) > 1:
+            raise Exception("only one type of value may be specified for Probability object!")
+        elif prob != None:
+            self.logprob = math.log(prob)
+        elif logprob != None:
+            self.logprob = logprob
+        elif log2prob != None:
+            self.logprob = log2prob / math.log2(math.e)
+        elif log10prob != None:
+            self.logprob = log10prob / math.log10(math.e)
+        elif neglogprob != None:
+            self.logprob = -neglogprob
+        elif neglog2prob != None:
+            self.logprob = (-neglog2prob) / math.log2(math.e)
+        elif neglog10prob != None:
+            self.logprob = (-neglog10prob) / math.log10(math.e)
+
+    def __str__(self):
+        return "%f/%f" % (self.prob(), self.logprob)
+
+    def prob(self):
+        return math.exp(self.logprob)
+
+    def log(self):
+        return self.logprob
+
+    def log2(self):
+        return self.logprob / math.log(math.e, 2)
+
+    def log10(self):
+        return self.logprob / math.log(math.e, 10)
+
+    def __mul__(self, other):
+        return Probability(logprob=self.logprob + other.logprob)
+
+    def __div__(self, other):
+        return Probability(logprob=self.logprob - other.logprob)
+
+    def __add__(self, other):        
+        logprobs = sorted([self.logprob, other.logprob])        
+        pi = logprobs[-1]
+        return Probability(logprob=pi + math.log(sum([math.exp(log_p - pi) for log_p in logprobs])))
+
+    #def __sub__(self, other):
+    #    return self + Probability(prob=-other.prob())
+        #logprobs = sorted([self.logprob, other.logprob])        
+        #pi = logprobs[-1]
+        #return Probability(logprob=pi + math.log(sum([math.exp(log_p - pi) for log_p in logprobs])))
 
 def jags_to_numpy(samples):
     samples = ri2py(samples)

@@ -2,7 +2,8 @@ import re
 import gzip
 import math
 import locale
-from common_tools import meta_open
+import operator
+from common_tools import meta_open, Probability
 
 arpabo_rx = re.compile(r"""
 ^(?P<preamble>.*?)
@@ -35,11 +36,9 @@ def format_grams(grams):
     to_join = []
     for toks, prob, bow in sorted(grams):
         if bow == None:
-            #to_join.append("%s %s" % (prob, " ".join(toks)))
-            to_join.append("%f %s" % (prob, " ".join(toks)))
+            to_join.append("%f %s" % (prob.log10(), " ".join(toks)))
         else:
-            #to_join.append("%s %s %s" % (prob, " ".join(toks), bow))
-            to_join.append("%f %s %f" % (prob, " ".join(toks), bow))
+            to_join.append("%f %s %f" % (prob.log10(), " ".join(toks), bow))
     return "\n".join(to_join)
 
 def unpack_grams(n, s):
@@ -49,38 +48,96 @@ def unpack_grams(n, s):
         if len(toks) == n:
             raise Exception("line \"%s\" is too short" % e)
         elif len(toks) == n + 1:
-            retval.append((toks[1:], float(toks[0]), None))
-            #retval.append((toks[1:], toks[0], None))
+            retval.append((toks[1:], Probability(log10prob=float(toks[0])), None))
         elif len(toks) == n + 2:
-            retval.append((toks[1:-1], float(toks[0]), float(toks[-1])))
-            #retval.append((toks[1:-1], toks[0], toks[-1]))
+            retval.append((toks[1:-1], Probability(log10prob=float(toks[0])), float(toks[-1])))
     return retval
 
+class ProbabilityList(dict):
+    """
+    A list of unigrams and probabilities in *negative* log-10 space.
+    """
+    def __init__(self, file_handle):
+        for line in file_handle:
+            word, prob = line.split()
+            self[word] = Probability(neglog10prob=float(prob))
+
+    def get_words(self):
+        return set(self.keys())
+
 class Arpabo():
+    """
+    The Arpabo format stores n-gram probabilities in log-10 space.
+    """
     def __init__(self, file_handle):
         m = arpabo_rx.match(file_handle.read())
         self.preamble = m.group("preamble").strip()
         self.bboard = m.group("bboard").strip()
-        #self.data = [(int(x.group(1)), int(x.group(2))) for x in re.finditer(r"ngram (\d+)\=(\d+)", m.group("data"))]
         m2 = re.finditer(r"\\(?P<n>\d+)-grams:(?P<vals>.*?)\n\n", m.group("grams"), re.S)
         self.grams = {int(x.group("n")) : unpack_grams(int(x.group("n")), x.group("vals")) for x in m2}
         self.words = set([x[0][0] for x in self.grams[1]])
-    def __str__(self):
-        return "%d words" % (len(self.get_words()))
+        self.normalize()
 
-    def unigram_sum(self, n):
-        return sum([math.pow(10, p) for t, p, b in self.grams[n]])
+    def __str__(self):
+        return "%d words, %s total unigram probability" % (len(self.get_words()), self.unigram_sum())
+
+    def unigram_sum(self):
+        return reduce(operator.add, [p for g, p, b in self.grams[1]])
 
     def get_words(self):
         return self.words
+
+    def get_probability_of_words(self, words):
+        return reduce(operator.add, [p for w, p, b in self.grams[1] if w[0] in words])
+
+    def get_probability_of_not_words(self, words):
+        return reduce(operator.add, [p for w, p, b in self.grams[1] if w[0] not in words])
+
+    def filter_by(self, other_vocab):
+        to_keep = other_vocab.get_words()
+        to_keep.add("~SIL")
+        to_drop = set([p for w, p, b in self.grams[1] if w[0] not in to_keep] )
+        not_drop = [p for w, p, b in self.grams[1] if w[0] in to_keep] 
+        removed_prob = reduce(operator.add, [p for w, p, b in self.grams[1] if w[0] not in to_keep])
+        self.grams[1] = [(w, p, b) for w, p, b in self.grams[1] if w[0] not in to_drop or w[0] == "~SIL"]
+        self.words = self.words & to_keep
+        self.words.add("~SIL")
+        self.normalize()
+        return None
+
+    def normalize(self):
+        total = self.unigram_sum()
+        scale = Probability(prob=1.0) / total
+        self.grams[1] = [(t, p * scale, b) for t, p, b in self.grams[1]]
+        return None
 
     def add_unigrams(self, words, weight, new_bow=.000000001):
         words = [w for w in words if w not in self.get_words()]
         for w in words:
             self.words.add(w)
-        scale = 1.0 - weight
-        new_prob = math.log10(weight / len(words))
-        self.grams[1] = sorted([(t, math.log10(math.pow(10, p) * scale), b) for t, p, b in self.grams[1]] + [([w], new_prob, new_bow) for w in words])
+        scale = Probability(prob=1.0 - weight)
+        new_prob = Probability(prob=weight / len(words))
+        self.grams[1] = sorted([(t, p * scale, b) for t, p, b in self.grams[1]] + [([w], new_prob, new_bow) for w in words])
+        self.normalize()
+
+    def scale_unigrams(self, scale):
+        self.grams[1] = [(w, p * scale, b) for w, p, b in self.grams[1]]
+
+    def add_unigrams_with_probs(self, words, weight=None, new_bow=.000000001):
+        total_new_prob = reduce(operator.add, words.values())
+        if weight != None:
+            self.scale_unigrams(Probability(prob=1.0 - weight))
+            weight = Probability(prob=weight)            
+            words = {w : (p / total_new_prob) * weight for w, p in words.iteritems() if w not in self.get_words()}
+        else:
+            words = {w : p for w, p in words.iteritems() if w not in self.get_words()}
+        for w in words.keys():
+            self.words.add(w)
+
+        self.grams[1] = sorted([(t, p, b) for t, p, b in self.grams[1]] + 
+                                   [([w], words[w], new_bow) for w in words])
+
+        self.normalize()
 
     def format(self):
         return """%s
@@ -100,7 +157,8 @@ BBOARD_END
        "\n".join(["ngram %d=%d" % (n, len(grams)) for n, grams in sorted(self.grams.iteritems())]), 
        "\n".join(sorted(["\\%d-grams:\n%s\n" % (k, format_grams(v)) for k, v in self.grams.iteritems()])))
 
-class Dictionary():
+class Pronunciations():
+    
     def __init__(self, file_handle):
         self.entries = {}
         for w, n, p in [re.match(r"^(\S+?)(\(\d+\))? (.*)$", l).groups() for l in file_handle]:
@@ -112,31 +170,41 @@ class Dictionary():
                 n = len(self.entries.get(w, {})) + 1
             self.entries[w] = self.entries.get(w, {})
             self.entries[w][int(n)] = p.replace("[ wb ]", "").split()
-
+    
     def __str__(self):
-        return "%d words" % (len(self.get_words()))
-
+        return "%d words, %d pronunciations" % (len(self.get_words()), sum([len(x) for x in self.entries.values()]))
+    
     def add_entries(self, other):
         for w, ps in sorted(other.entries.iteritems()):
             if w not in self.entries and not w.startswith("<"):
                 self.entries[w] = ps
-
+    
+    def filter_by(self, other_vocab):
+        self.entries = {k : self.entries[k] for k in other_vocab.get_words() if k in self.entries or k == "~SIL"}
+        return None
+    
+    def replace_by(self, other_prons):
+        for w in other_prons.entries.keys():
+            if w in self.entries:
+                self.entries[w] = other_prons.entries[w]
+        return None
+    
     def get_words(self):
         return set(self.entries.keys())
-
-    def format_vocabulary(self):
+    
+    def format_vocabulary(self):        
         retval = []
         for w, ps in sorted(self.entries.iteritems(), lambda x, y : compare(x[0], y[0])):
+
             for n, p in sorted(ps.iteritems()):
                 if "REJ" not in p:
                     if w == "~SIL":
                         retval.append("%s(%.2d) VOCAB_NIL_WORD 1.0" % (w, n))
                     else:
-                        retval.append("%s(%.2d) %s" % (w, n, w))
-
-        return "\n".join(retval)
-
-    def format_dictionary(self):
+                        retval.append("%s(%.2d) %s" % (w, n, w))    
+        return "\n".join(retval) + "\n"
+    
+    def format(self):
         retval = []
         for w, ps in sorted(self.entries.iteritems(), lambda x, y : compare(x[0], y[0])):
             for n, p in sorted(ps.iteritems()):
@@ -146,7 +214,40 @@ class Dictionary():
                     else:
                         pp = " ".join([p[0]] + ["[ wb ]"] + p[1:] + ["[ wb ]"])
                 retval.append("%s(%.2d) %s" % (w, n, pp))
-        return "\n".join(retval)
+        return "\n".join(retval) + "\n"
+
+class Vocabulary():
+
+    def __init__(self):
+        self.entries = {}
+
+    def __init__(self, file_handle):
+        self.entries = {}
+        for w1, n, w2 in [re.match(r"^(\S+?)\((\d+)\)? (.*)$", l).groups() for l in file_handle]:
+            if w1 != w2 and w1 != "~SIL":
+                raise Exception("%s != %s" % (w1, w2))
+            self.entries[w1] = self.entries.get(w1, []) + [int(n)]
+
+    def get_words(self):
+        return set(self.entries.keys())
+
+    def filter_by(self, other_vocab):
+        self.entries = {k : self.entries[k] for k in other_vocab.get_words() if k in self.entries or k == "~SIL"}
+        return None
+
+    def format(self):
+        retval = []
+        for w, ns in sorted(self.entries.iteritems()):            
+            for n in sorted(ns):
+                if w == "~SIL":
+                    retval.append("%s(%.2d) VOCAB_NIL_WORD 1.0" % (w, n))
+                else:
+                    retval.append("%s(%.2d) %s" % (w, n, w))
+        return "\n".join(retval) + "\n"
+
+    def __str__(self):
+        return "%d words, %d forms" % (len(self.get_words()), sum([len(x) for x in self.entries.values()]))
+
 
 
 if __name__ == "__main__":
@@ -156,7 +257,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-I", "--dict_input", dest="dict_input")
     parser.add_argument("-A", "--dict_added", dest="dict_added")
-    parser.add_argument("-d", "--dictionary", dest="dictionary")
+    parser.add_argument("-p", "--pronunciations", dest="pronunciations")
     parser.add_argument("-v", "--vocabulary", dest="vocabulary")
 
     parser.add_argument("-i", "--input", dest="input")
@@ -167,13 +268,13 @@ if __name__ == "__main__":
 
     if options.dict_input:
         with meta_open(options.dict_input) as fd, meta_open(options.dict_added) as afd:
-            old_dict = Dictionary(fd)
+            old_dict = Pronunciations(fd)
             print len(old_dict.entries)
-            added_dict = Dictionary(afd)
+            added_dict = Pronunciations(afd)
             old_dict.add_entries(added_dict)
             print len(old_dict.entries)
-        with meta_open(options.dictionary, "w") as new_dict, meta_open(options.vocabulary, "w") as new_vocabulary:
-            new_dict.write(old_dict.format_dictionary())
+        with meta_open(options.pronunciations, "w") as new_dict, meta_open(options.vocabulary, "w") as new_vocabulary:
+            new_dict.write(old_dict.format_pronunciations())
             new_vocabulary.write(old_dict.format_vocabulary())        
     else:
 
@@ -181,12 +282,12 @@ if __name__ == "__main__":
             unis = [x.strip() for x in ufd]
             arpabo = Arpabo(fd)
 
-        print arpabo.unigram_sum(1), len(arpabo.grams[1])
+        print arpabo.unigram_sum(), len(arpabo.grams[1])
         arpabo.add_unigrams(unis, options.weight)
-        print arpabo.unigram_sum(1), len(arpabo.grams[1])
+        print arpabo.unigram_sum(), len(arpabo.grams[1])
 
-        with meta_open(options.language_model, "w") as lm, meta_open(options.dictionary, "w") as dictionary, meta_open(options.vocabulary, "w") as vocab:
+        with meta_open(options.language_model, "w") as lm, meta_open(options.pronunciations, "w") as pronunciations, meta_open(options.vocabulary, "w") as vocab:
             lm.write(arpabo.language_model())
-            dictionary.write(arpabo.dictionary())
+            pronunciations.write(arpabo.pronunciations())
             vocab.write(arpabo.vocabulary())
 
