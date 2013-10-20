@@ -69,10 +69,10 @@ class Probability():
         return self.logprob
 
     def log2(self):
-        return self.logprob / math.log(math.e, 2)
+        return self.logprob / math.log(2, math.e)
 
     def log10(self):
-        return self.logprob / math.log(math.e, 10)
+        return self.logprob / math.log(10, math.e)
 
     def __mul__(self, other):
         return Probability(logprob=self.logprob + other.logprob)
