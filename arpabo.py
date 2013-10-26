@@ -31,7 +31,6 @@ def compare(x, y):
         return locale.strcoll(x, y)
 
 
-
 def format_grams(grams):
     to_join = []
     for toks, prob, bow in sorted(grams):
@@ -40,6 +39,7 @@ def format_grams(grams):
         else:
             to_join.append("%f %s %f" % (prob.log10(), " ".join(toks), bow))
     return "\n".join(to_join)
+
 
 def unpack_grams(n, s):
     retval = []
@@ -53,11 +53,14 @@ def unpack_grams(n, s):
             retval.append((toks[1:-1], Probability(log10prob=float(toks[0])), float(toks[-1])))
     return retval
 
+
 class ProbabilityList(dict):
     """
     A list of unigrams and probabilities in *negative* log-10 space.
     """
-    def __init__(self, file_handle):
+
+    def __init__(self, file_handle, special=["~SIL"]):
+        self.special = set(special)
         for line in file_handle:
             word, prob = line.split()
             self[word] = Probability(neglog10prob=float(prob))
@@ -65,11 +68,26 @@ class ProbabilityList(dict):
     def get_words(self):
         return set(self.keys())
 
+    def filter_by(self, other):
+        other_words = other.get_words()
+        for k in self.keys():
+            if k not in other_words and k not in self.special:
+                del self[k]
+
+    def format(self):
+        return "\n".join(["%s %f" % (k, -v.log10()) for k, v in self.iteritems()]) + "\n"
+
+    def __str__(self):
+        return "%d words, %s total probability" % (len(self), reduce(operator.add, self.values()))
+
+
 class Arpabo():
     """
     The Arpabo format stores n-gram probabilities in log-10 space.
     """
-    def __init__(self, file_handle):
+
+    def __init__(self, file_handle, special=["~SIL"]):
+        self.special = set(special)
         m = arpabo_rx.match(file_handle.read())
         self.preamble = m.group("preamble").strip()
         self.bboard = m.group("bboard").strip()
@@ -95,13 +113,13 @@ class Arpabo():
 
     def filter_by(self, other_vocab):
         to_keep = other_vocab.get_words()
-        to_keep.add("~SIL")
+        [to_keep.add("~SIL") for x in self.special]
         to_drop = set([p for w, p, b in self.grams[1] if w[0] not in to_keep] )
         not_drop = [p for w, p, b in self.grams[1] if w[0] in to_keep] 
         removed_prob = reduce(operator.add, [p for w, p, b in self.grams[1] if w[0] not in to_keep])
-        self.grams[1] = [(w, p, b) for w, p, b in self.grams[1] if w[0] not in to_drop or w[0] == "~SIL"]
+        self.grams[1] = [(w, p, b) for w, p, b in self.grams[1] if w[0] not in to_drop or w[0] in self.special]
         self.words = self.words & to_keep
-        self.words.add("~SIL")
+        #[self.words.add(x) for x in self.special]
         self.normalize()
         return None
 
@@ -157,12 +175,17 @@ BBOARD_END
        "\n".join(["ngram %d=%d" % (n, len(grams)) for n, grams in sorted(self.grams.iteritems())]), 
        "\n".join(sorted(["\\%d-grams:\n%s\n" % (k, format_grams(v)) for k, v in self.grams.iteritems()])))
 
+
 class Pronunciations():
+    """
+    """
     
-    def __init__(self, file_handle):
+    def __init__(self, file_handle, special=["~SIL"], keep_rejects=False):
+        self.special = set(special)
+        self.keep_rejects = keep_rejects
         self.entries = {}
         for w, n, p in [re.match(r"^(\S+?)(\(\d+\))? (.*)$", l).groups() for l in file_handle]:
-            if "REJ" in p:
+            if "REJ" in p and not self.keep_rejects:
                 continue
             if n:
                 n = int(n[1:-1])
@@ -180,7 +203,8 @@ class Pronunciations():
                 self.entries[w] = ps
     
     def filter_by(self, other_vocab):
-        self.entries = {k : self.entries[k] for k in other_vocab.get_words() if k in self.entries or k == "~SIL"}
+        other_words = other_vocab.get_words()
+        self.entries = {k : self.entries[k] for k in self.get_words() if k in other_words or k in self.special}
         return None
     
     def replace_by(self, other_prons):
@@ -192,23 +216,23 @@ class Pronunciations():
     def get_words(self):
         return set(self.entries.keys())
     
-    def format_vocabulary(self):        
+    def format_vocabulary(self, print_rejects=False):
         retval = []
         for w, ps in sorted(self.entries.iteritems(), lambda x, y : compare(x[0], y[0])):
 
             for n, p in sorted(ps.iteritems()):
-                if "REJ" not in p:
-                    if w == "~SIL":
+                if "REJ" not in p or print_rejects:
+                    if w in self.special:
                         retval.append("%s(%.2d) VOCAB_NIL_WORD 1.0" % (w, n))
                     else:
                         retval.append("%s(%.2d) %s" % (w, n, w))    
         return "\n".join(retval) + "\n"
     
-    def format(self):
+    def format(self, print_rejects=False):
         retval = []
         for w, ps in sorted(self.entries.iteritems(), lambda x, y : compare(x[0], y[0])):
             for n, p in sorted(ps.iteritems()):
-                if "REJ" not in p:
+                if "REJ" not in p or print_rejects:
                     if len(p) == 1:
                         pp = " ".join(p + ["[ wb ]"])
                     else:
@@ -218,13 +242,15 @@ class Pronunciations():
 
 class Vocabulary():
 
-    def __init__(self):
+    def __init__(self, special=["~SIL"]):
+        self.special = set(special)
         self.entries = {}
 
-    def __init__(self, file_handle):
+    def __init__(self, file_handle, special=["~SIL"]):
+        self.special = set(special)
         self.entries = {}
         for w1, n, w2 in [re.match(r"^(\S+?)\((\d+)\)? (.*)$", l).groups() for l in file_handle]:
-            if w1 != w2 and w1 != "~SIL":
+            if w1 != w2 and w1 not in self.special: # "~SIL":
                 raise Exception("%s != %s" % (w1, w2))
             self.entries[w1] = self.entries.get(w1, []) + [int(n)]
 
@@ -232,7 +258,8 @@ class Vocabulary():
         return set(self.entries.keys())
 
     def filter_by(self, other_vocab):
-        self.entries = {k : self.entries[k] for k in other_vocab.get_words() if k in self.entries or k == "~SIL"}
+        other_words = other_vocab.get_words()
+        self.entries = {k : self.entries[k] for k in self.get_words() if k in other_words or k in self.special}
         return None
 
     def format(self):
@@ -247,7 +274,6 @@ class Vocabulary():
 
     def __str__(self):
         return "%d words, %d forms" % (len(self.get_words()), sum([len(x) for x in self.entries.values()]))
-
 
 
 if __name__ == "__main__":

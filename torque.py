@@ -12,13 +12,13 @@ class Job():
         self.resources = resources
         self.dependencies = dependencies
         self.commands = commands
-        self.path = path
+        self.path = os.path.abspath(path)
         self.array = array
         self.resources["cput"] = "20:30:00"
         self.resources["walltime"] = "20:30:00"
         self.commands.append("exit 0")
-        self.stdout_path = stdout_path
-        self.stderr_path = stderr_path
+        self.stdout_path = os.path.abspath(stdout_path)
+        self.stderr_path = os.path.abspath(stderr_path)
 
     def __str__(self):
         lines = ["#PBS -N %s" % self.name] + ["#PBS -l %s=%s" % (k, v) for k, v in self.resources.iteritems()]
@@ -43,11 +43,11 @@ class Job():
         lines += [c for c in self.commands]
         return "\n".join(lines) + "\n"
 
-    def submit(self, commit=False, propagate=True):
+    def submit(self, commit=False, hold=False, propagate=True):
         cmd = ["qsub"]
         if propagate:
             cmd.append("-V")
-        if options.hold:
+        if hold:
             cmd.append("-h")
         if commit:
             logging.debug("Submitting the following job specification via \"%s\":\n%s" % (" ".join(cmd), self))
@@ -64,7 +64,7 @@ class Job():
             self.job_id = random.randint(1, 10000)
             
 def get_nodes(commit):
-    if options.commit:
+    if commit:
         out, err = subprocess.Popen(["qnodes"], stdout=subprocess.PIPE).communicate()
         return [x.strip() for x in out.split("\n") if re.match(r"^\S+.*$", x)]
     else:
