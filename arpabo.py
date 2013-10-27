@@ -56,14 +56,14 @@ def unpack_grams(n, s):
 
 class ProbabilityList(dict):
     """
-    A list of unigrams and probabilities in *negative* log-10 space.
+    A list of unigrams and probabilities in *negative* natural log space.
     """
 
     def __init__(self, file_handle, special=["~SIL"]):
         self.special = set(special)
         for line in file_handle:
             word, prob = line.split()
-            self[word] = Probability(neglog10prob=float(prob))
+            self[word] = Probability(neglogprob=float(prob))
 
     def get_words(self):
         return set(self.keys())
@@ -75,7 +75,7 @@ class ProbabilityList(dict):
                 del self[k]
 
     def format(self):
-        return "\n".join(["%s %f" % (k, -v.log10()) for k, v in self.iteritems()]) + "\n"
+        return "\n".join(["%s %f" % (k, -v.log()) for k, v in self.iteritems()]) + "\n"
 
     def __str__(self):
         return "%d words, %s total probability" % (len(self), reduce(operator.add, self.values()))

@@ -7,7 +7,7 @@ import os.path
 import os
 
 class Job():
-    def __init__(self, name="UNNAMED", resources={}, dependencies=[], commands=[], path="", array=0, stdout_path=None, stderr_path=None):
+    def __init__(self, name="UNNAMED", resources={}, dependencies=[], commands=[], path="", array=0, stdout_path=None, stderr_path=None, other=[]):
         self.name = name
         self.resources = resources
         self.dependencies = dependencies
@@ -19,9 +19,10 @@ class Job():
         self.commands.append("exit 0")
         self.stdout_path = os.path.abspath(stdout_path)
         self.stderr_path = os.path.abspath(stderr_path)
+        self.other = other
 
     def __str__(self):
-        lines = ["#PBS -N %s" % self.name] + ["#PBS -l %s=%s" % (k, v) for k, v in self.resources.iteritems()]
+        lines = ["#PBS -N %s" % self.name] + self.other + ["#PBS -l %s=%s" % (k, v) for k, v in self.resources.iteritems()]
         if self.stdout_path:
             lines.append("#PBS -o %s" % os.path.join(self.stdout_path, "%s.out" % (self.name)))
         if self.stderr_path:
@@ -54,7 +55,7 @@ class Job():
             out, err = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE).communicate(str(self))
             try:
                 logging.info("Got job id: %s" % out)
-                job_id = int(out.strip().split(".")[0])
+                job_id = int(re.match(r"^(\d+).*", out).group(1))
                 self.job_id = job_id
             except:
                 print out, err
@@ -69,3 +70,10 @@ def get_nodes(commit):
         return [x.strip() for x in out.split("\n") if re.match(r"^\S+.*$", x)]
     else:
         return ["dummy%d" % x for x in range(1, 5)]
+
+def get_jobs(commit):
+    if commit:
+        out, err = subprocess.Popen(["qstat"], stdout=subprocess.PIPE).communicate()
+        return [(int(y[0]), y[4]) for y in [x.groups() for x in re.finditer(r"^(\d+)\S*\s+(\S+)\s+(\S+)\s+(\S+)\s+(Q|R|E|H)\s+(\S+)\s*$", out, re.M)]]
+    else:
+        return []
