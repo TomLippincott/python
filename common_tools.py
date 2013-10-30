@@ -8,6 +8,9 @@ import cPickle
 import csv
 import tempfile
 import math
+import tempfile
+import shutil
+import contextlib
 #import bz2
 from os.path import basename, splitext
 from math import log, sqrt, pow, pi, e, sinh
@@ -29,6 +32,15 @@ try:
     import lxml.etree as et
 except:
     import xml.etree.ElementTree as et
+
+
+@contextlib.contextmanager
+def temp_dir(prefix="tmp"):
+    temp_dir = tempfile.mkdtemp(prefix=prefix)
+    yield temp_dir
+    shutil.rmtree(temp_dir)
+
+
 
 def Exp(lam):
     return -log(random.random()) / lam
