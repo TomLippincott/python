@@ -275,6 +275,55 @@ class Vocabulary():
     def __str__(self):
         return "%d words, %d forms" % (len(self.get_words()), sum([len(x) for x in self.entries.values()]))
 
+class FrequencyList(dict):
+
+    def __init__(self, source={}):
+        if isinstance(source, list):
+            for f in source:
+                with meta_open(f) as ifd:
+                    for k, v in source.iteritems():
+                        self[k] = v
+        elif isinstance(source, (file, gzip.GzipFile)):            
+            for w, c in [x.split() for x in source]:
+                self[w] = int(c)
+        elif isinstance(source, dict):
+            for k, v in source.iteritems():
+                self[k] = v
+
+    def join(self, other):
+        new_counts = {}
+        for word, count in self.iteritems():
+            new_counts[word] = count
+        for word, count in other.iteritems():
+            new_counts[word] = new_counts.get(word, 0) + count
+        return FrequencyList(new_counts)
+
+    def format(self):
+        return "\n".join(["%s %d" % (k, v) for k, v in self.iteritems()]) + "\n"
+
+    def make_conservative(self):
+        new_counts = {}
+        for word, count in self.iteritems():
+            if all([not word.startswith(x) for x in ["[", "<", "("]]) and all ([not word.endswith(x) for x in ["]", ">", ")"]]):
+                cleaned_word = re.sub(r"\+|\*", "", word.lower())
+                new_counts[cleaned_word] = new_counts.get(cleaned_word, 0) + count
+        return FrequencyList(new_counts)
+
+class MorfessorOutput(dict):
+    def __init__(self, fd):  
+        self.morphs = {"PRE" : set(),
+                       "STM" : set(),
+                       "SUF" : set(),
+                       }
+        for l in fd:
+            count, rest = re.match(r"^(\d+) (.*)$", l).groups()
+            key = tuple([re.match(r"^(.*)\/(PRE|STM|SUF)$", x).groups() for x in rest.split(" + ")])
+            self[key] = self.get(key, 0) + int(count)
+            for morph, type in key:
+                self.morphs[type].add(morph)
+
+    def format(self):
+        return "\n".join(["%d %s" % (count, " + ".join(morphs)) for morphs, count in self.iteritems()]) + "\n"
 
 if __name__ == "__main__":
     import argparse

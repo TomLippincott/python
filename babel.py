@@ -325,11 +325,13 @@ class MorfessorOutput(dict):
     def format(self):
         return "\n".join(["%d %s" % (count, " + ".join(morphs)) for morphs, count in self.iteritems()]) + "\n"
 
-class ASROutput:
-    pass
+class ASRResults:
+    def __init__(self, fd):
+        agg, nsents, nwords, corr, sub, deleted, inserted, error, sentence_error = [l for l in fd if "aggregated" in l][0].replace("|").strip().split()
 
-class KWSOutput:
-    pass
+class KWSResults:
+    def __init__(self, fd):
+        toks = [l for l in fd if "aggregated" in l][-1].replace("|").strip().split()
 
 if __name__ == "__main__":
     import argparse
