@@ -15,6 +15,8 @@ import contextlib
 from os.path import basename, splitext
 from math import log, sqrt, pow, pi, e, sinh
 import tarfile
+import subprocess
+import shlex
 try:
     import numpy
     from scipy.special import gamma, gammainc
@@ -40,7 +42,20 @@ def temp_dir(prefix="tmp"):
     yield temp_dir
     shutil.rmtree(temp_dir)
 
-
+def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, torque=False, data=None):
+    """
+    Simple convenience wrapper for running commands (not an actual Builder).
+    """
+    if torque:
+        pass
+    else:
+        logging.info("Running local command: %s", cmd)    
+        process = subprocess.Popen(shlex.split(cmd), env=env, stdin=stdin, stdout=stdout, stderr=stderr)
+        if data:
+            out, err = process.communicate(data)
+        else:
+            out, err = process.communicate()
+        return out, err, process.returncode == 0
 
 def Exp(lam):
     return -log(random.random()) / lam

@@ -327,11 +327,23 @@ class MorfessorOutput(dict):
 
 class ASRResults:
     def __init__(self, fd):
-        agg, nsents, nwords, corr, sub, deleted, inserted, error, sentence_error = [l for l in fd if "aggregated" in l][0].replace("|").strip().split()
+        agg, nsents, nwords, corr, sub, deleted, inserted, error, sentence_error = [l for l in fd if "aggregated" in l][0].replace("|", " ").strip().split()
+        self.vals = {"error" : float(error),
+                     "substitutions" : float(sub),
+                     "deletions" : float(deleted),
+                     "insertions" : float(inserted),
+                     }
+    def get(self, name):
+        return self.vals[name] / 100.0
 
 class KWSResults:
     def __init__(self, fd):
-        toks = [l for l in fd if "aggregated" in l][-1].replace("|").strip().split()
+        toks = [l for l in fd if "Occurrence" in l][-1].replace("|", " ").strip().split()
+        self.vals = {"pmiss" : float(toks[14]),
+                     "mtwv" : float(toks[15]),
+                     }
+    def get(self, name):
+        return self.vals[name]
 
 if __name__ == "__main__":
     import argparse
