@@ -59,11 +59,12 @@ class ProbabilityList(dict):
     A list of unigrams and probabilities in *negative* natural log space.
     """
 
-    def __init__(self, file_handle, special=["~SIL"]):
+    def __init__(self, file_handle=None, special=["~SIL"]):
         self.special = set(special)
-        for line in file_handle:
-            word, prob = line.split()
-            self[word] = Probability(neglogprob=float(prob))
+        if file_handle:
+            for line in file_handle:
+                word, prob = line.split()
+                self[word] = Probability(neglogprob=float(prob))
 
     def get_words(self):
         return set(self.keys())
@@ -74,8 +75,14 @@ class ProbabilityList(dict):
             if k not in other_words and k not in self.special:
                 del self[k]
 
+    def get_top_n(self, n):
+        retval = ProbabilityList()
+        for w, p in sorted(self.iteritems(), lambda x, y : cmp(y[1], x[1]))[0:n]:
+            retval[w] = p
+        return retval
+    
     def format(self):
-        return "\n".join(["%s %f" % (k, -v.log()) for k, v in self.iteritems()]) + "\n"
+        return "\n".join(["%s\t%f" % (k, -v.log()) for k, v in sorted(self.iteritems(), lambda x, y : cmp(y[1], x[1]))]) + "\n"
 
     def __str__(self):
         return "%d words, %s total probability" % (len(self), reduce(operator.add, self.values()))

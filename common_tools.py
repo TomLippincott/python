@@ -37,10 +37,18 @@ except:
 
 
 @contextlib.contextmanager
-def temp_dir(prefix="tmp"):
+def temp_dir(prefix="tmp", remove=True):
     temp_dir = tempfile.mkdtemp(prefix=prefix)
     yield temp_dir
-    shutil.rmtree(temp_dir)
+    if remove:
+        shutil.rmtree(temp_dir)
+
+@contextlib.contextmanager
+def temp_file(prefix="tmp", remove=True):
+    (fid, temp_file) = tempfile.mkstemp(prefix=prefix)
+    yield temp_file
+    if remove:
+        os.remove(temp_file)
 
 def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, torque=False, data=None):
     """
@@ -112,6 +120,8 @@ class Probability():
         pi = logprobs[-1]
         return Probability(logprob=pi + math.log(sum([math.exp(log_p - pi) for log_p in logprobs])))
 
+    def __cmp__(self, other):
+        return cmp(self.log(), other.log())
     #def __sub__(self, other):
     #    return self + Probability(prob=-other.prob())
         #logprobs = sorted([self.logprob, other.logprob])        
