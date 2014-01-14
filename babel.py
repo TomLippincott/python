@@ -5,6 +5,7 @@ import locale
 import operator
 from common_tools import meta_open, Probability
 
+
 arpabo_rx = re.compile(r"""
 ^(?P<preamble>.*?)
 ^BBOARD_BEGIN\s*
@@ -183,35 +184,45 @@ BBOARD_END
        "\n".join(sorted(["\\%d-grams:\n%s\n" % (k, format_grams(v)) for k, v in self.grams.iteritems()])))
 
 
-class Pronunciations():
+class Pronunciations(dict):
     """
     """
-    
-    def __init__(self, file_handle, special=["~SIL"], keep_rejects=False):
+    def __init__(self, source={}, special=["~SIL"], keep_rejects=False):
         self.special = set(special)
         self.keep_rejects = keep_rejects
-        self.entries = {}
-        for w, n, p in [re.match(r"^(\S+?)(\(\d+\))? (.*)$", l).groups() for l in file_handle]:
-            if "REJ" in p and not self.keep_rejects:
-                continue
-            if n:
-                n = int(n[1:-1])
-            else:
-                n = len(self.entries.get(w, {})) + 1
-            self.entries[w] = self.entries.get(w, {})
-            self.entries[w][int(n)] = p.replace("[ wb ]", "").split()
+        if isinstance(source, list):
+            for f in source:
+                with meta_open(f) as ifd:
+                    for k, v in source.iteritems():
+                        self[k] = v
+        elif isinstance(source, (file, gzip.GzipFile)):            
+            for w, n, p in [re.match(r"^(\S+?)(\(\d+\))? (.*)$", l).groups() for l in source]:
+                if "REJ" in p and not self.keep_rejects:
+                    continue
+                if n:
+                    n = int(n[1:-1])
+                else:
+                    n = len(self.get(w, {})) + 1
+                self[w] = self.get(w, {})
+                self[w][int(n)] = p.replace("[ wb ]", "").split()
     
     def __str__(self):
-        return "%d words, %d pronunciations" % (len(self.get_words()), sum([len(x) for x in self.entries.values()]))
+        return "%d words, %d pronunciations" % (len(self.get_words()), sum([len(x) for x in self.values()]))
+
+    def phones(self):
+        return set(sum(sum([x.values() for x in self.values()], []), []))
     
     def add_entries(self, other):
         for w, ps in sorted(other.entries.iteritems()):
             if w not in self.entries and not w.startswith("<"):
-                self.entries[w] = ps
+                self[w] = ps
     
     def filter_by(self, other_vocab):
         other_words = other_vocab.get_words()
-        self.entries = {k : self.entries[k] for k in self.get_words() if k in other_words or k in self.special}
+        new_entries = {k : self.entries[k] for k in self.get_words() if k in other_words or k in self.special}
+        self.clear()
+        for k, v in new_entries.iteritems():
+            self[k] = v
         return None
     
     def replace_by(self, other_prons):
@@ -221,11 +232,11 @@ class Pronunciations():
         return None
     
     def get_words(self):
-        return set(self.entries.keys())
+        return set(self.keys())
     
     def format_vocabulary(self, print_rejects=False):
         retval = []
-        for w, ps in sorted(self.entries.iteritems(), lambda x, y : compare(x[0], y[0])):
+        for w, ps in sorted(self.iteritems(), lambda x, y : compare(x[0], y[0])):
 
             for n, p in sorted(ps.iteritems()):
                 if "REJ" not in p or print_rejects:
@@ -247,19 +258,26 @@ class Pronunciations():
                 retval.append("%s(%.2d) %s" % (w, n, pp))
         return "\n".join(retval) + "\n"
 
-class Vocabulary():
 
-    def __init__(self, special=["~SIL"]):
-        self.special = set(special)
-        self.entries = {}
+class Vocabulary(dict):
 
-    def __init__(self, file_handle, special=["~SIL"]):
-        self.special = set(special)
-        self.entries = {}
-        for w1, n, w2 in [re.match(r"^(\S+?)\((\d+)\)? (.*)$", l).groups() for l in file_handle]:
-            if w1 != w2 and w1 not in self.special: # "~SIL":
-                raise Exception("%s != %s" % (w1, w2))
-            self.entries[w1] = self.entries.get(w1, []) + [int(n)]
+    def __init__(self, source={}, special=["~SIL"]):
+        self.special = special
+        if isinstance(source, list):
+            for f in source:
+                with meta_open(f) as ifd:
+                    for k, v in source.iteritems():
+                        self[k] = v
+        elif isinstance(source, (file, gzip.GzipFile)):            
+            for w1, n, w2 in [re.match(r"^(\S+?)\((\d+)\)? (.*)$", l).groups() for l in file_handle]:
+                if w1 != w2 and w1 not in self.special:
+                    raise Exception("%s != %s" % (w1, w2))
+                self[w1] = self.get(w1, []) + [int(n)]
+            for w, c in [x.split() for x in source]:
+                self[w] = int(c)
+        elif isinstance(source, dict):
+            for k, v in source.iteritems():
+                self[k] = v
 
     def get_words(self):
         return set(self.entries.keys())
@@ -281,6 +299,7 @@ class Vocabulary():
 
     def __str__(self):
         return "%d words, %d forms" % (len(self.get_words()), sum([len(x) for x in self.entries.values()]))
+
 
 class FrequencyList(dict):
 
@@ -311,10 +330,11 @@ class FrequencyList(dict):
     def make_conservative(self):
         new_counts = {}
         for word, count in self.iteritems():
-            if all([not word.startswith(x) for x in ["[", "<", "("]]) and all ([not word.endswith(x) for x in ["]", ">", ")"]]):
-                cleaned_word = re.sub(r"\+|\*", "", word.lower())
+            if all([not word.startswith(x) for x in ["[", "<", "("]]) and all([not word.endswith(x) for x in ["]", ">", ")"]]) and all([not x in word for x in ["_", "*", "+"]]):
+                cleaned_word = re.sub(r"\+|\*|\-", "", word.lower())
                 new_counts[cleaned_word] = new_counts.get(cleaned_word, 0) + count
         return FrequencyList(new_counts)
+
 
 class MorfessorOutput(dict):
     def __init__(self, fd):  
@@ -332,7 +352,8 @@ class MorfessorOutput(dict):
     def format(self):
         return "\n".join(["%d %s" % (count, " + ".join(morphs)) for morphs, count in self.iteritems()]) + "\n"
 
-class ASRResults:
+
+class ASRResults():
     def __init__(self, fd):
         agg, nsents, nwords, corr, sub, deleted, inserted, error, sentence_error = [l for l in fd if "aggregated" in l][0].replace("|", " ").strip().split()
         self.vals = {"error" : float(error),
@@ -343,7 +364,8 @@ class ASRResults:
     def get(self, name):
         return self.vals[name] / 100.0
 
-class KWSResults:
+
+class KWSResults():
     def __init__(self, fd):
         toks = [l for l in fd if "Occurrence" in l][-1].replace("|", " ").strip().split()
         self.vals = {"pmiss" : float(toks[14]),
@@ -351,6 +373,7 @@ class KWSResults:
                      }
     def get(self, name):
         return self.vals[name]
+
 
 if __name__ == "__main__":
     import argparse
