@@ -213,22 +213,22 @@ class Pronunciations(dict):
         return set(sum(sum([x.values() for x in self.values()], []), []))
     
     def add_entries(self, other):
-        for w, ps in sorted(other.entries.iteritems()):
-            if w not in self.entries and not w.startswith("<"):
+        for w, ps in sorted(other.iteritems()):
+            if w not in self and not w.startswith("<"):
                 self[w] = ps
     
     def filter_by(self, other_vocab):
         other_words = other_vocab.get_words()
-        new_entries = {k : self.entries[k] for k in self.get_words() if k in other_words or k in self.special}
+        new_entries = {k : self[k] for k in self.get_words() if k in other_words or k in self.special}
         self.clear()
         for k, v in new_entries.iteritems():
             self[k] = v
         return None
     
     def replace_by(self, other_prons):
-        for w in other_prons.entries.keys():
-            if w in self.entries:
-                self.entries[w] = other_prons.entries[w]
+        for w in other_prons.keys():
+            if w in self:
+                self[w] = other_prons[w]
         return None
     
     def get_words(self):
@@ -248,7 +248,7 @@ class Pronunciations(dict):
     
     def format(self, print_rejects=False):
         retval = []
-        for w, ps in sorted(self.entries.iteritems(), lambda x, y : compare(x[0], y[0])):
+        for w, ps in sorted(self.iteritems(), lambda x, y : compare(x[0], y[0])):
             for n, p in sorted(ps.iteritems()):
                 if "REJ" not in p or print_rejects:
                     if len(p) == 1:
@@ -280,16 +280,16 @@ class Vocabulary(dict):
                 self[k] = v
 
     def get_words(self):
-        return set(self.entries.keys())
+        return set(self.keys())
 
     def filter_by(self, other_vocab):
         other_words = other_vocab.get_words()
-        self.entries = {k : self.entries[k] for k in self.get_words() if k in other_words or k in self.special}
+        self = {k : self[k] for k in self.get_words() if k in other_words or k in self.special}
         return None
 
     def format(self):
         retval = []
-        for w, ns in sorted(self.entries.iteritems()):            
+        for w, ns in sorted(self.iteritems()):            
             for n in sorted(ns):
                 if w == "~SIL":
                     retval.append("%s(%.2d) VOCAB_NIL_WORD 1.0" % (w, n))
@@ -298,7 +298,7 @@ class Vocabulary(dict):
         return "\n".join(retval) + "\n"
 
     def __str__(self):
-        return "%d words, %d forms" % (len(self.get_words()), sum([len(x) for x in self.entries.values()]))
+        return "%d words, %d forms" % (len(self.get_words()), sum([len(x) for x in self.values()]))
 
 
 class FrequencyList(dict):
