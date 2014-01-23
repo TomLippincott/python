@@ -269,7 +269,7 @@ class Vocabulary(dict):
                     for k, v in source.iteritems():
                         self[k] = v
         elif isinstance(source, (file, gzip.GzipFile)):            
-            for w1, n, w2 in [re.match(r"^(\S+?)\((\d+)\)? (.*)$", l).groups() for l in file_handle]:
+            for w1, n, w2 in [re.match(r"^(\S+?)\((\d+)\)? (.*)$", l).groups() for l in source]:
                 if w1 != w2 and w1 not in self.special:
                     raise Exception("%s != %s" % (w1, w2))
                 self[w1] = self.get(w1, []) + [int(n)]
