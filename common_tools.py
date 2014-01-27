@@ -50,20 +50,20 @@ def temp_file(prefix="tmp", remove=True):
     if remove:
         os.remove(temp_file)
 
-def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, torque=False, data=None):
-    """
-    Simple convenience wrapper for running commands (not an actual Builder).
-    """
-    if torque:
-        pass
-    else:
-        logging.info("Running local command: %s", cmd)    
-        process = subprocess.Popen(shlex.split(cmd), env=env, stdin=stdin, stdout=stdout, stderr=stderr)
-        if data:
-            out, err = process.communicate(data)
-        else:
-            out, err = process.communicate()
-        return out, err, process.returncode == 0
+# def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, torque=False, data=None):
+#     """
+#     Simple convenience wrapper for running commands (not an actual Builder).
+#     """
+#     if torque:
+#         pass
+#     else:
+#         logging.info("Running local command: %s", cmd)    
+#         process = subprocess.Popen(shlex.split(cmd), env=env, stdin=stdin, stdout=stdout, stderr=stderr)
+#         if data:
+#             out, err = process.communicate(data)
+#         else:
+#             out, err = process.communicate()
+#         return out, err, process.returncode == 0
 
 def Exp(lam):
     return -log(random.random()) / lam
