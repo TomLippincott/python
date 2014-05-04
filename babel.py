@@ -279,13 +279,20 @@ class Vocabulary(dict):
             for k, v in source.iteritems():
                 self[k] = v
 
+    @staticmethod
+    def from_set(s):
+        retval = Vocabulary()
+        for i, x in enumerate(s):
+            retval[x] = [i]
+        return retval
+
     def get_words(self):
         return set(self.keys())
 
     def filter_by(self, other_vocab):
         other_words = other_vocab.get_words()
-        self = {k : self[k] for k in self.get_words() if k in other_words or k in self.special}
-        return None
+        #self = {k : self[k] for k in self.get_words() if k in other_words or k in self.special}
+        return Vocabulary.from_set([k for k in self.get_words() if k in other_words or k in self.special])
 
     def format(self):
         retval = []

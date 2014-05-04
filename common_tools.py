@@ -35,6 +35,125 @@ try:
 except:
     import xml.etree.ElementTree as et
 
+def parse_location(l):
+    word_id = int(l.find("word").get("id"))
+    try:
+        tag_id = int(l.find("tag").get("id"))    
+    except:
+        tag_id = None
+    analysis_ids = [int(x.get("id")) for x in l.getiterator("analysis")]
+    return (word_id, tag_id, analysis_ids)
+
+
+class DataSet():
+    def __init__(self, sentences, indexToWord, indexToTag, indexToAnalysis):
+        self.sentences = sentences
+        self.indexToWord = indexToWord
+        self.indexToTag = indexToTag
+        self.indexToAnalysis = indexToAnalysis
+        wordToIndex = {v : k for k, v in self.indexToWord.iteritems()}
+        self.analysisIndexToWordIndex = {a_id : wordToIndex["".join(a)] for a_id, a in self.indexToAnalysis.iteritems()}
+
+    @staticmethod
+    def from_stream(stream):
+        xml = et.parse(stream)
+        indexToWord = {int(x.get("id")) : x.text for x in xml.findall("//word_inventory/entry")}
+        indexToTag = {int(x.get("id")) : x.text for x in xml.findall("//tag_inventory/entry")}
+        indexToAnalysis = {int(x.get("id")) : tuple([y.text for y in x.getiterator("morph")]) for x in xml.findall("//analysis_inventory/entry")}
+        sentences = [[parse_location(l) for l in s.getiterator("location")] for s in xml.getiterator("sentence")]
+        return DataSet(sentences, indexToWord, indexToTag, indexToAnalysis)
+
+    @staticmethod
+    def from_analyses(analyses):
+        wordToIndex = {}
+        analysisToIndex = {}
+        for c, analysis in analyses:
+            c = int(c)
+            analysis = tuple(analysis)
+            word = "".join(analysis)
+            wordToIndex[word] = wordToIndex.get(word, len(wordToIndex))
+            analysisToIndex[analysis] = analysisToIndex.get(analysis, len(analysisToIndex))
+        indexToWord = {v : k for k, v in wordToIndex.iteritems()}
+        indexToAnalysis = {v : k for k, v in analysisToIndex.iteritems()}
+        indexToTag = {}
+        return DataSet([], indexToWord, indexToTag, indexToAnalysis)
+
+    @staticmethod
+    def empty():
+        return DataSet([], {}, {}, {})
+
+    def get_subset(self, indices):
+        sentences = [self.sentences[i] for i in indices]
+        all_words, all_analyses, all_tags = set(), set(), set()
+        for w, t, aa in sum(sentences, []):
+            all_words.add(w)
+            if t:
+                all_tags.add(t)
+            for a in aa:
+                all_analyses.add(a)
+        return DataSet(sentences, 
+                       {k : v for k, v in self.indexToWord.iteritems() if k in all_words},
+                       {k : v for k, v in self.indexToTag.iteritems() if k in all_tags},
+                       {k : v for k, v in self.indexToAnalysis.iteritems() if k in all_analyses}
+                       )
+
+    def get_analyses(self):
+        retval = {}
+        for a_id, w_id in self.analysisIndexToWordIndex.iteritems():
+            word = self.indexToWord[w_id]
+            analysis = self.indexToAnalysis[a_id]
+            retval[word] = retval.get(word, set())
+            retval[word].add(analysis)
+        return retval
+
+    def write(self, fd):
+        xml = et.TreeBuilder()
+        xml.start("xml", {})
+        xml.start("preamble", {})
+        xml.start("analysis_inventory", {})
+        for i, a in self.indexToAnalysis.iteritems():
+            xml.start("entry", {"id" : str(i)})
+            for m in a:
+                xml.start("morph", {})
+                try:
+                   xml.data(m.decode("utf-8"))
+                except:
+                   xml.data(m)
+                xml.end("morph")
+            xml.end("entry")
+        xml.end("analysis_inventory")
+        xml.start("tag_inventory", {})
+        for i, t in self.indexToTag.iteritems():
+            xml.start("entry", {"id" : str(i)}), xml.data(t), xml.end("entry")
+        xml.end("tag_inventory")
+        xml.start("word_inventory", {})
+        for i, w in self.indexToWord.iteritems():            
+            xml.start("entry", {"id" : str(i)}) 
+            try:
+                xml.data(w.decode("utf-8"))
+            except:
+                xml.data(w)
+            xml.end("entry")
+        xml.end("word_inventory")
+        xml.end("preamble")
+        xml.start("sentences", {})
+        for i, s in enumerate(self.sentences):
+            xml.start("sentence", {"n" : str(i + 1)})
+            for j, (w, t, aa) in enumerate(s):
+                xml.start("location", {"n" : str(j + 1)})
+                xml.start("word", {"id" : str(w)}), xml.end("word")
+                if t:
+                    xml.start("tag", {"id" : str(t)}), xml.end("tag")
+                xml.start("analyses", {})
+                for a in aa:
+                    xml.start("analysis", {"id" : str(a)}), xml.end("analysis")
+                xml.end("analyses")
+                xml.end("location")
+            xml.end("sentence")
+        xml.end("sentences")
+        xml.end("xml")
+        fd.write(et.tounicode(xml.close(), pretty_print=True).encode("utf-8"))
+
 
 @contextlib.contextmanager
 def temp_dir(prefix="tmp", remove=True):
@@ -281,6 +400,15 @@ def harmonic_mean(precision, recall):
 
 def unpoint(token):
     return u"".join([x for x in token.decode('utf-8') if "LETTER" in name(x, "UNKNOWN")])
+
+def meta_splitext(fname, max_depth=None, acc=[]):
+    name, ext = os.path.splitext(fname)
+    if max_depth <= 0 or ext == "":
+        return (name, "".join(acc + [ext]))
+    elif max_depth == None:
+        return meta_splitext(name, max_depth, acc + [ext])
+    else:
+        return meta_splitext(name, max_depth - 1, acc + [ext])
 
 
 def meta_basename(fname, mdepth=1):
