@@ -10,7 +10,7 @@ import cPickle as pickle
 import numpy
 import math
 import xml.etree.ElementTree as et
-from morfessor import BaselineModel, AnnotatedCorpusEncoding, AnnotationsModelUpdate, LexiconEncoding, CorpusEncoding, Encoding, MorfessorException, MorfessorIO, get_default_argparser
+from morfessor import BaselineModel, MorfessorIO, get_default_argparser
 
 def train_morfessor(target, source, env):
     parser = get_default_argparser()

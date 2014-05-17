@@ -50,16 +50,37 @@ class DataSet():
         self.sentences = sentences
         self.indexToWord = indexToWord
         self.indexToTag = indexToTag
-        self.indexToAnalysis = indexToAnalysis
+        self.indexToAnalysis = {}
+        for k, v in indexToAnalysis.iteritems():
+            if isinstance(v[0], tuple):
+                self.indexToAnalysis[k] = v
+            else:
+                self.indexToAnalysis[k] = [({}, x) for x in v]
         wordToIndex = {v : k for k, v in self.indexToWord.iteritems()}
-        self.analysisIndexToWordIndex = {a_id : wordToIndex["".join(a)] for a_id, a in self.indexToAnalysis.iteritems()}
+        self.analysisIndexToWordIndex = {a_id : wordToIndex["".join([x[1] for x in a])] for a_id, a in self.indexToAnalysis.iteritems()}
+
+    @staticmethod
+    def from_sentences(sentences):
+        wordToIndex = {}
+        tagToIndex = {}
+        analysisToIndex = {}
+        for s in sentences:
+            for w, t, aa in s:
+                wordToIndex[w] = wordToIndex.get(w, len(wordToIndex))
+                tagToIndex[t] = tagToIndex.get(t, len(tagToIndex))
+                for a in aa:
+                    analysisToIndex[a] = analysisToIndex.get(a, len(analysisToIndex))
+        return DataSet([[(wordToIndex[w], tagToIndex[t], [analysisToIndex[a] for a in aa]) for w, t, aa in s] for s in sentences], 
+                       {v : k for k, v in wordToIndex.iteritems()}, 
+                       {v : k for k, v in tagToIndex.iteritems()}, 
+                       {v : ({}, k) for k, v in analysisToIndex.iteritems()})
 
     @staticmethod
     def from_stream(stream):
         xml = et.parse(stream)
         indexToWord = {int(x.get("id")) : x.text for x in xml.findall("//word_inventory/entry")}
         indexToTag = {int(x.get("id")) : x.text for x in xml.findall("//tag_inventory/entry")}
-        indexToAnalysis = {int(x.get("id")) : tuple([y.text for y in x.getiterator("morph")]) for x in xml.findall("//analysis_inventory/entry")}
+        indexToAnalysis = {int(x.get("id")) : tuple([(y.get("type", "unknown"), y.text) for y in x.getiterator("morph")]) for x in xml.findall("//analysis_inventory/entry")}
         sentences = [[parse_location(l) for l in s.getiterator("location")] for s in xml.getiterator("sentence")]
         return DataSet(sentences, indexToWord, indexToTag, indexToAnalysis)
 
@@ -112,13 +133,13 @@ class DataSet():
         xml.start("preamble", {})
         xml.start("analysis_inventory", {})
         for i, a in self.indexToAnalysis.iteritems():
-            xml.start("entry", {"id" : str(i)})
-            for m in a:
-                xml.start("morph", {})
+            xml.start("entry", {"id" : str(i)})            
+            for properties, morph in a:
+                xml.start("morph", properties)
                 try:
-                   xml.data(m.decode("utf-8"))
+                    xml.data(morph.decode("utf-8"))
                 except:
-                   xml.data(m)
+                    xml.data(morph)
                 xml.end("morph")
             xml.end("entry")
         xml.end("analysis_inventory")

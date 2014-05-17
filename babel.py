@@ -57,15 +57,28 @@ def unpack_grams(n, s):
 
 class ProbabilityList(dict):
     """
-    A list of unigrams and probabilities in *negative* natural log space.
+    A dictionary of unigrams and probabilities in *negative* natural log space.
     """
 
-    def __init__(self, file_handle=None, special=["~SIL"]):
-        self.special = set(special)
-        if file_handle:
-            for line in file_handle:
-                word, prob = line.split()
-                self[word] = Probability(neglogprob=float(prob))
+    def __init__(self):
+        self.special = set()
+
+    @staticmethod
+    def from_stream(s, special=["~SIL"]):
+        retval = ProbabilityList()
+        retval.special = set(special)
+        for line in s:
+            word, prob = line.split()
+            retval[word] = Probability(neglogprob=float(prob))
+        return retval
+
+    @staticmethod
+    def from_dict(d, special=["~SIL"]):
+        retval = ProbabilityList()
+        retval.special = set(special)
+        for k, v in d.iteritems():
+            retval[k] = v
+        return retval
 
     def get_words(self):
         return set(self.keys())
