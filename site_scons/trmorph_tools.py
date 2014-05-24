@@ -1,41 +1,30 @@
 from SCons.Builder import Builder
-import re
-from glob import glob
-from functools import partial
-import logging
-import os.path
-import os
-from common_tools import meta_open
-import cPickle as pickle
-import numpy
-import math
-import xml.etree.ElementTree as et
-from babel import ProbabilityList
+from SCons.Action import Action
 from subprocess import Popen, PIPE
+from acceptor_tools import language_filter
 
-def turkish_filter(target, source, env):
-    with meta_open(source[0].rstr()) as ifd:
-        words = ProbabilityList(ifd)
-    pid = Popen(env.subst("${FLOOKUP} ${TRMORPH}").split(), stdin=PIPE, stdout=PIPE)
-    stdout, stderr = pid.communicate("\n".join(words.keys()))
+def split_words(target, source, env, words):
+    cmd = env.subst("${FLOOKUP} ${TURKISH_FST}")
+    try:
+        text = "\n".join(words).encode("utf-8")
+    except:
+        text = "\n".join(words)
+    pid = Popen(cmd.split(), stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = pid.communicate(text)
+    good, bad = set(), set()
     for l in stdout.split("\n"):
-        toks = l.split()
-        if len(toks) == 2 and toks[1] == "+?":
-            del words[toks[0]]
-    with meta_open(target[0].rstr(), "w") as ofd:
-        ofd.write(words.format())
-    return None
-
-def turkish_filter_emitter(target, source, env):
-    if not target[0].rstr().endswith(".gz"):
-        new_target = "%s_trmorph.gz" % os.path.splitext(source[0].rstr())[0]
-    else:
-        new_target = target[0]
-    return new_target, source
+        toks = l.strip().split()
+        if len(toks) > 0:            
+            if toks[-1].endswith("?"):
+                bad.add(toks[0])
+            else:
+                good.add(toks[0])
+    return (good, bad)
 
 def TOOLS_ADD(env):
-    env["FLOOKUP"] = "/home/tom/local/bin/flookup"
-    env["TRMORPH"] = "/home/tom/TRmorph/trmorph.fst"
+    env["FOMA"] = "${LOCAL_PATH}/bin/foma"
+    env["FLOOKUP"] = "${LOCAL_PATH}/bin/flookup"
+    env["TURKISH_FST"] = "${EMNLP_TOOLS_PATH}/turkish/TRmorph/trmorph.fst"
     env.Append(BUILDERS = {
-            "TurkishFilter" : Builder(action=turkish_filter, emitter=turkish_filter_emitter),
+            "TurkishFilter" : Builder(action=Action(language_filter(split_words), "TurkishFilter($TARGETS, $SOURCES)")),
             })
