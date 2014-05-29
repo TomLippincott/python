@@ -25,7 +25,7 @@ def emma_score(env, target, gold, predictions):
 
 def add_morphology(target, source, env):
     with meta_open(source[0].rstr()) as ifd:
-        data = DataSet.from_stream(ifd)
+        data = DataSet.from_stream(ifd)[-1]
     morphology = {}
     with meta_open(source[1].rstr()) as ifd:        
         for l in ifd:
@@ -41,7 +41,7 @@ def add_morphology(target, source, env):
 
 def dataset_to_emma(target, source, env):
     with meta_open(source[0].rstr()) as ifd:
-        data = DataSet.from_stream(ifd)
+        data = DataSet.from_stream(ifd)[-1]
     with meta_open(target[0].rstr(), "w") as ofd:
         for word, analyses in sorted(data.get_analyses().iteritems()):
             x = "%s\t%s\n" % (word, ", ".join([" ".join(["%s:NULL" % m for m in a]) for a in analyses]))

@@ -5,7 +5,7 @@ from functools import partial
 import logging
 import os.path
 import os
-from common_tools import meta_open, DataSet, Probability, adjusted_rand, harmonic_mean, modified_purity, normalized_information_distance
+from common_tools import meta_open, DataSet, Probability, adjusted_rand, harmonic_mean, modified_purity, normalized_information_distance, v_measure
 import cPickle as pickle
 import numpy
 from random import randint
@@ -45,6 +45,8 @@ def plot_reduction(target, source, env):
     for i, (props, vals) in enumerate(data.iteritems()):        
         if props[0] == "bbg":
             name = "Mofessor"
+        elif props[0] == "joint":
+            name = "Joint"
         elif props[0] == "adaptor":
             name = "Adaptors"
         else:
@@ -128,7 +130,7 @@ def oov_reduction(target, source, env):
         bucket_size = source[4].read()
     training_fname, expansion_fname, oov_fname, accepted_fname = [x.rstr() for x in source[0:4]]
     with meta_open(training_fname) as training_ifd, meta_open(expansion_fname) as expansion_ifd, meta_open(oov_fname) as oov_ifd, meta_open(accepted_fname) as accepted_ifd:
-        training = set(DataSet.from_stream(training_ifd).indexToWord.values())
+        training = set(DataSet.from_stream(training_ifd)[-1].indexToWord.values())
         expansion = [(w, math.exp(-float(lp))) for w, lp in [l.split() for l in expansion_ifd] if w not in training]
         oov = {w : int(c) for c, w in [l.strip().split() for l in oov_ifd if w not in training]}
         accepted = set([x.strip() for x in accepted_ifd])
@@ -158,21 +160,26 @@ def oov_reduction(target, source, env):
 
 def evaluate_tagging(target, source, env):
     with meta_open(source[0].rstr()) as gold_fd, meta_open(source[1].rstr()) as pred_fd:
-        gold = DataSet.from_stream(gold_fd)
-        pred = DataSet.from_stream(pred_fd)
-    assert(len(gold.sentences) == len(pred.sentences))
-    for gold_sentence, pred_sentence in zip(gold.sentences, pred.sentences):
-        assert(len(gold_sentence) == len(pred_sentence))
-    gold_tags = sum([[l[1] for l in s] for s in gold.sentences], [])
-    pred_tags = sum([[l[1] for l in s] for s in pred.sentences], [])
-    scores = {}
-    scores["TRand"] = adjusted_rand(gold_tags, pred_tags)
-    scores["TmPur"] = harmonic_mean(modified_purity(gold_tags, pred_tags), modified_purity(pred_tags, gold_tags, 2))
-    scores["TNIS"] = 1.0 - normalized_information_distance(gold_tags, pred_tags)
-    names = scores.keys()
+        gold = DataSet.from_stream(gold_fd)[-1]
+        preds = DataSet.from_stream(pred_fd)
+        #assert(len(gold.sentences) == len(pred.sentences))
+    scores = []
+    for pred in preds:
+        for gold_sentence, pred_sentence in zip(gold.sentences, pred.sentences):
+            assert(len(gold_sentence) == len(pred_sentence))
+        gold_tags = sum([[l[1] for l in s] for s in gold.sentences], [])
+        pred_tags = sum([[l[1] for l in s] for s in pred.sentences], [])
+        #scores = {}
+    #scores["TRand"] = adjusted_rand(gold_tags, pred_tags)
+    #scores["TmPur"] = harmonic_mean(modified_purity(gold_tags, pred_tags), modified_purity(pred_tags, gold_tags, 2))
+    #scores["TNIS"] = 1.0 - normalized_information_distance(gold_tags, pred_tags)
+        scores.append({"VM" : v_measure(pred_tags, gold_tags)})
+        #names = scores.keys()
+    names = ["VM"]
     with meta_open(target[0].rstr(), "w") as ofd:
         ofd.write("\t".join(names) + "\n")
-        ofd.write("\t".join(["%.3f" % scores[x] for x in names]) + "\n")
+        for score in scores:
+            ofd.write("\t".join(["%.3f" % score[x] for x in names]) + "\n")
     return None
 
 def evaluate_morphology(target, source, env):
@@ -212,7 +219,7 @@ def random_segmentations(target, source, env):
         return tuple([x for x in [prefix, stem, suffix] if len(x) > 0])
     style_name = source[1].read()
     with meta_open(source[0].rstr()) as ifd:
-        data = DataSet.from_stream(ifd)
+        data = DataSet.from_stream(ifd)[-1]
     if style_name == "type-based":
         wordIndexToAnalysis = {}
         for i, w in data.indexToWord.iteritems():
@@ -229,7 +236,7 @@ def random_tags(target, source, env):
     num_tags = env["NUM_TAGS"]
     style_name = source[1].read()
     with meta_open(source[0].rstr()) as ifd:
-        data = DataSet.from_stream(ifd)
+        data = DataSet.from_stream(ifd)[-1]
     if style_name == "type-based":
         wordIndexToTag = {i : randint(0, num_tags) for i in data.indexToWord.keys()}
         new_data = DataSet.from_sentences([[(data.indexToWord[w], str(wordIndexToTag[w]), [data.indexToAnalysis[a] for a in aa]) for w, t, aa in s] for s in data.sentences])

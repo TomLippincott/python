@@ -85,13 +85,17 @@ class DataSet():
                        {v : k for k, v in analysisToIndex.iteritems()})
 
     @staticmethod
-    def from_stream(stream):
-        xml = et.parse(stream)
-        indexToWord = {int(x.get("id")) : unicode(x.text) for x in xml.findall("//word_inventory/entry")}
-        indexToTag = {int(x.get("id")) : x.text for x in xml.findall("//tag_inventory/entry")}
-        indexToAnalysis = {int(x.get("id")) : tuple([y.text for y in x.getiterator("morph")]) for x in xml.findall("//analysis_inventory/entry")}
+    def from_xml(xml):
+        indexToWord = {int(x.get("id")) : unicode(x.text) for x in xml.findall("preamble/word_inventory/entry")}
+        indexToTag = {int(x.get("id")) : x.text for x in xml.findall("preamble/tag_inventory/entry")}
+        indexToAnalysis = {int(x.get("id")) : tuple([y.text for y in x.getiterator("morph")]) for x in xml.findall("preamble/analysis_inventory/entry")}
         sentences = [[parse_location(l) for l in s.getiterator("location")] for s in xml.getiterator("sentence")]
         return DataSet(sentences, indexToWord, indexToTag, indexToAnalysis)
+
+    @staticmethod
+    def from_stream(stream):
+        xml = et.parse(stream)
+        return [DataSet.from_xml(x) for x in xml.getiterator("dataset")]
 
     @staticmethod
     def from_analyses(analyses):
@@ -141,6 +145,7 @@ class DataSet():
     def write(self, fd):
         xml = et.TreeBuilder()
         xml.start("xml", {})
+        xml.start("dataset", {})
         xml.start("preamble", {})
         xml.start("analysis_inventory", {})
         for i, a in self.indexToAnalysis.iteritems():
@@ -184,6 +189,7 @@ class DataSet():
                 xml.end("location")
             xml.end("sentence")
         xml.end("sentences")
+        xml.end("dataset")
         xml.end("xml")
         fd.write(et.tounicode(xml.close(), pretty_print=True).encode("utf-8"))
 
@@ -932,6 +938,35 @@ def mutual_information(A, B):
 
 def normalized_information_distance(A, B):
     return 1.0 - mutual_information(A, B) / max(seq_entropy(A), seq_entropy(B))
+
+def v_measure(clusts, gold, beta=1.0):
+    def _entropy(assignments):
+        poss = {v : i for i, v in enumerate(set(assignments))}
+        dist = numpy.zeros(shape=(len(poss)))
+        for a in assignments:
+            dist[poss[a]] += 1.0
+        dist /= dist.sum()
+        return -(dist * numpy.log2(dist)).sum()
+    def _conditional_entropy(assignmentsA, assignmentsB):
+        poss = {v : i for i, v in enumerate(set(assignmentsA))}
+        distA = numpy.zeros(shape=(len(poss)))
+        for a in assignmentsA:
+            distA[poss[a]] += 1.0
+        distA /= distA.sum()
+        possB = {v : i for i, v in enumerate(set(assignmentsB))}
+        distB = numpy.zeros(shape=(len(possB)))
+        for a in assignmentsB:
+            distB[possB[a]] += 1.0
+        distB /= distB.sum()
+        poss = {v : i for i, v in enumerate(set(zip(assignmentsA, assignmentsB)))}
+        distAB = numpy.zeros(shape=len(poss))
+        for a, b in zip(assignmentsA, assignmentsB):
+            distAB[poss[(a, b)]] += 1.0
+        distAB /= distAB.sum()
+        return (distAB * numpy.log2(numpy.array([distB[possB[b]] / distAB[i] for (a, b), i in poss.iteritems()]))).sum()
+    h = 1.0 - (_conditional_entropy(gold, clusts) / _entropy(gold))
+    c = 1.0 - (_conditional_entropy(clusts, gold) / _entropy(clusts))
+    return ((1.0 + beta) * h * c) / (beta * h + c)
 
 if __name__ == "__main__":
     import doctest

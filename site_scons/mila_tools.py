@@ -7,7 +7,7 @@ from acceptor_tools import language_filter
 import os.path
 
 def split_words(target, source, env, words):
-    print len(words)
+    #print len(words)
     good, bad = set(), set()
     r = True
     with temp_dir(remove=r) as raw, temp_dir(remove=r) as tokenized, temp_dir(remove=r) as analyzed:

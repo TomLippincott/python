@@ -24,7 +24,7 @@ def train_morfessor(target, source, env):
                      atom_separator=args.separator)
     words = {}
     with meta_open(source[0].rstr()) as ifd:
-        dataset = DataSet.from_stream(ifd)
+        dataset = DataSet.from_stream(ifd)[-1]
         for sentence in dataset.sentences:
             for word_id, tag_id, analysis_ids in sentence:
                 word = dataset.indexToWord[word_id]

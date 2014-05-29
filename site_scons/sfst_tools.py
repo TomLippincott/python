@@ -26,5 +26,6 @@ def TOOLS_ADD(env):
     env["GERMAN_FST"] = "${EMNLP_TOOLS_PATH}/german/morphisto-02022011.a"    
     env.Append(BUILDERS = {
             "EnglishFilter" : Builder(action=make_filter("ENGLISH")),
+            "TrivialFilter" : Builder(action=make_filter("ENGLISH")),
             "GermanFilter" : Builder(action=make_filter("GERMAN")),
             })
