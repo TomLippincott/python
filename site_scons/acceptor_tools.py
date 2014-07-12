@@ -6,10 +6,9 @@ def language_filter(split_words):
     def actual_filter(target, source, env):
         with meta_open(source[0].rstr()) as ifd:
             if "xml" in source[0].rstr():
-                words = DataSet.from_stream(ifd).indexToWord.values()
+                words = sum([x.indexToWord.values() for x in DataSet.from_stream(ifd)], [])
             else:
                 words = sum([[x for x in re.split(r"\s+", l.strip()) if not re.match(r".*\d.*", x)] for l in ifd], [])
-        #words = [w for w in words if re.match(r"^\w+$", w, re.UNICODE)]
         good, bad = split_words(target, source, env, words)
         try:
             with open(target[0].rstr(), "w") as good_ofd, open(target[1].rstr(), "w") as bad_ofd:

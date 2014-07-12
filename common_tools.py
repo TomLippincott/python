@@ -54,12 +54,6 @@ class DataSet():
         self.indexToWord = indexToWord
         self.indexToTag = indexToTag
         self.indexToAnalysis = indexToAnalysis
-        for k, v in indexToAnalysis.iteritems():
-            continue
-            if isinstance(v[0], tuple):
-                self.indexToAnalysis[k] = v
-            else:
-                self.indexToAnalysis[k] = [({}, x) for x in v]
         wordToIndex = {v : k for k, v in self.indexToWord.iteritems()}        
         self.analysisIndexToWordIndex = {a_id : wordToIndex.get("".join([x for x in a]), None) for a_id, a in self.indexToAnalysis.iteritems()}
 
@@ -71,7 +65,7 @@ class DataSet():
         for s in sentences:
             for w, t, aa in s:
                 wordToIndex[w] = wordToIndex.get(w, len(wordToIndex))
-                if t:
+                if t != None:
                     tagToIndex[t] = tagToIndex.get(t, len(tagToIndex))
                 for a in map(tuple, aa):
                     try:
@@ -79,9 +73,9 @@ class DataSet():
                     except:
                         print a
                         sys.exit()
-        return DataSet([[(wordToIndex[w], tagToIndex.get(t, None), [analysisToIndex[a] for a in aa]) for w, t, aa in s] for s in sentences], 
+        return DataSet([[(wordToIndex[w], tagToIndex.get(t, None), [analysisToIndex[tuple(a)] for a in aa]) for w, t, aa in s] for s in sentences], 
                        {v : k for k, v in wordToIndex.iteritems()}, 
-                       {v : k for k, v in tagToIndex.iteritems()},
+                       {v : k for k, v in tagToIndex.iteritems()},                       
                        {v : k for k, v in analysisToIndex.iteritems()})
 
     @staticmethod
@@ -121,7 +115,7 @@ class DataSet():
         all_words, all_analyses, all_tags = set(), set(), set()
         for w, t, aa in sum(sentences, []):
             all_words.add(w)
-            if t:
+            if t != None:
                 all_tags.add(t)
             for a in aa:
                 all_analyses.add(a)
@@ -180,7 +174,7 @@ class DataSet():
             for j, (w, t, aa) in enumerate(s):
                 xml.start("location", {"n" : str(j + 1)})
                 xml.start("word", {"id" : str(w)}), xml.end("word")
-                if t:
+                if t != None:
                     xml.start("tag", {"id" : str(t)}), xml.end("tag")
                 xml.start("analyses", {})
                 for a in aa:
@@ -716,7 +710,27 @@ def jsd_s(x, k, N, m):
     return gammainc(v / 2.0, N * log(2.0) * x) / gamma(v / 2.0)
 
 
-def log_likelihood(counts, totals, sign=False):
+def log_likelihood(counts):
+    actual_counts = numpy.asfarray(counts)
+    actual_totals = actual_counts.sum(0)
+    r_sums = actual_counts.sum(1)
+    expected_proportions = actual_totals / actual_totals.sum()
+    expected_counts = numpy.asfarray([x * expected_proportions for x in r_sums])
+    retval = numpy.asfarray(numpy.zeros(shape=actual_counts.shape))
+    for i, (this, this_expected) in enumerate(zip(actual_counts, expected_counts)):
+        that = actual_totals - this
+        that_expected = actual_totals - this_expected
+        res = (2.0 * ((this * numpy.log(this / this_expected)) + (that * numpy.log(that / that_expected))))
+        retval[i] = (2.0 * ((this * numpy.log(this / this_expected)) + (that * numpy.log(that / that_expected))))
+        signs = numpy.ones(shape=(retval[i].shape))
+        for j in range(signs.shape[0]):
+            if this_expected[j] > this[j]:
+                signs[j] = -1
+        retval[i] *= signs
+    return retval
+
+
+def _log_likelihood(counts, totals, sign=False):
     """
     Calculate log-likelihood
 
@@ -736,7 +750,7 @@ def log_likelihood(counts, totals, sign=False):
         return ll
 
 
-def log_likelihood_wrapper(counts, totals):
+def _log_likelihood_wrapper(counts, totals):
     counts = numpy.asarray(counts)
     totals = numpy.asarray(totals)
     ttotal = totals.sum()
@@ -967,6 +981,36 @@ def v_measure(clusts, gold, beta=1.0):
     h = 1.0 - (_conditional_entropy(gold, clusts) / _entropy(gold))
     c = 1.0 - (_conditional_entropy(clusts, gold) / _entropy(clusts))
     return ((1.0 + beta) * h * c) / (beta * h + c)
+
+def parse_rasp_file(text):
+    return [parse_rasp_sentence(x) for x in re.split(r"\n\n", text)]
+
+def parse_rasp_word(text):
+    try:
+        word, number, tag = re.match(r"^\|(\S+)\:(\d+)_(\S+)\|$", text).groups()
+    except:
+        raise BaseException(text)
+    return word, number, tag
+
+def parse_rasp_header(text):
+    return []
+
+def parse_rasp_dependency(text):
+    toks = [x for x in text[1:-1].split() if x not in ["_", "|;|"]]
+    try:
+        rel, head, dep = toks
+        head = parse_rasp_word(head)
+        dep = parse_rasp_word(dep)
+        return head, dep
+    except:
+        return ()
+
+def parse_rasp_sentence(text):
+    lines = text.strip().split("\n")
+    words = parse_rasp_header(lines[0])
+    deps = filter(lambda x : x != (), [parse_rasp_dependency(x) for x in lines[1:]])
+    return deps
+
 
 if __name__ == "__main__":
     import doctest

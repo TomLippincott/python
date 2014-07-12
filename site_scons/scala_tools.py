@@ -1,37 +1,3 @@
-"""SCons.Tool.scalac
-
-Tool-specific initialization for scalac.
-
-There normally shouldn't be any need to import this module directly.
-It will usually be imported through the generic SCons.Tool.Tool()
-selection method.
-
-"""
-
-#
-# Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014 The SCons Foundation
-#
-# Permission is hereby granted, free of charge, to any person obtaining
-# a copy of this software and associated documentation files (the
-# "Software"), to deal in the Software without restriction, including
-# without limitation the rights to use, copy, modify, merge, publish,
-# distribute, sublicense, and/or sell copies of the Software, and to
-# permit persons to whom the Software is furnished to do so, subject to
-# the following conditions:
-#
-# The above copyright notice and this permission notice shall be included
-# in all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
-# KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
-# WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-__revision__ = "src/engine/SCons/Tool/scalac.py  2014/03/02 14:18:15 garyo"
-
 import os
 import os.path
 import re
@@ -50,6 +16,7 @@ import gzip
 from os.path import join as pjoin
 from os import listdir
 import tarfile
+from common_tools import meta_open
 
 from SCons.Builder import Builder
 from SCons.Script import *
@@ -585,22 +552,47 @@ def recursive_find(path, pattern):
    return [e for e in entries if os.path.isfile(e) and re.match(pattern, os.path.basename(e))] + sum([recursive_find(e, pattern) for e in entries if os.path.isdir(e)], [])
 
 def scala_compile_generator(target, source, env, for_signature):
-   #print "\n".join(["%s %s" % (x.rstr(), x.decide_source(target)) for x in source])
-   return "scalac -deprecation -cp work/classes:${COMMONS_MATH3_JAR} -d work/classes ${CHANGED_SOURCES}"
+   return "scalac -deprecation -cp work/classes -d work/classes ${CHANGED_SOURCES}"
 
 def target_from_source(path, fname):
    pkg = re.match(r"^\s*package\s+(\S+)\s*$", open(fname).read(), re.M).group(1).replace(".", "/")
    return re.sub(r"^[^\/]*", path, fname.replace(".scala", ".class")).replace("bhmm", pkg)
 
-def scala_compile_emitter(target, source, env):
-   new_sources = [env.File(x) for x in recursive_find(source[0].rstr(), r".*\.scala$")]    
+#def scala_compile_emitter(target, source, env):
+#   new_sources = [env.File(x) for x in recursive_find(source[0].rstr(), r".*\.scala$")]    
+#   new_targets = [env.File(target_from_source(target[0].rstr(), x.rstr())) for x in new_sources]
+#   return new_targets, new_sources
+
+def scala(env, target, source):
+   if not SCons.Util.is_List(target):
+      target = [target]
+   if not SCons.Util.is_List(source):
+      source = [source]
+   new_sources = [env.File(x) for x in recursive_find(source[0].rstr(), r".*\.scala$")]
    new_targets = [env.File(target_from_source(target[0].rstr(), x.rstr())) for x in new_sources]
-   return new_targets, new_sources
+   #for x in new_sources:
+   #   print (x.rstr(), dir(x.get_ninfo()))
+
+   #print type(new_sources[0])
+   if not env["DEBUG"]:
+      new_sources = env.StripLogging(["work/debug_src/%s" % (os.path.basename(s.rstr())) for s in new_sources], new_sources)
+   env.ScalaCompile(new_targets, new_sources)
+
+def strip_logging(target, source, env):
+   for t, s in zip(target, source):
+      with meta_open(s.rstr()) as ifd:
+         lines = [l for l in ifd if "logger.fin" not in l and "assert" not in l]
+         with meta_open(t.rstr(), "w") as ofd:
+            ofd.write("".join(lines))
+   return None
 
 def TOOLS_ADD(env):
-    env.Append(BUILDERS = {
-            "Scala" : Builder(generator=scala_compile_generator, emitter=scala_compile_emitter),
-            })
+   fs = SCons.Node.FS.get_default_fs()
+   env.Append(BUILDERS = {
+         "ScalaCompile" : Builder(generator=scala_compile_generator, source_factory=fs.File),# emitter=scala_compile_emitter),
+         "StripLogging" : Builder(action=strip_logging),
+         })
+   env.AddMethod(scala, "Scala")
 
 # def TOOLS_ADD(env):
 #     """Add Builders and construction variables for scalac to an Environment."""

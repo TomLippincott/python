@@ -115,14 +115,3 @@ def submit_job(target, source, env):
 def TOOLS_ADD(env):
     env.Append(BUILDERS = {"SubmitJob" : Builder(action=submit_job),
                            })
-# "IBMTrainLanguageModel" : Builder(generator=ibm_train_language_model),
-#                            "BaseDictionary" : Builder(generator=make_base_dict),
-#                            "CollectRawText" : Builder(generator=collect_raw_text),
-#                            "Experiment" : Builder(action=experiment, emitter=experiment_emitter),
-#                            "MissingVocabulary" : Builder(action=missing_vocabulary),
-#                            "AugmentLanguageModel" : Builder(action=augment_language_model),
-#                            "AugmentLanguageModelFromBabel" : Builder(action=augment_language_model_from_babel),
-#                            "TranscriptVocabulary" : Builder(action=transcript_vocabulary),
-#                            "TrainPronunciationModel" : Builder(action=train_pronunciation_model),
-#                            "CreateASRDirectory" : Builder(action=create_asr_directory, emitter=create_asr_directory_emitter),
-#                            })
