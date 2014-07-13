@@ -23,6 +23,19 @@ def emma_score(env, target, gold, predictions):
     #     ofd.write("%.3f\n" % 1.0)
     #return [gold_emma, pred_emma]
 
+def get_without_case(word, morph):
+    retvals = []
+    for analysis in morph.get(word.lower(), []):
+        morphs = []
+        total = 0
+        for m in analysis:
+            nm = word[total:total + len(m)]
+            if nm != "":
+                morphs.append(nm)
+                total += len(nm)
+        retvals.append(morphs)
+    return retvals
+
 def add_morphology(target, source, env):
     with meta_open(source[0].rstr()) as ifd:
         data = DataSet.from_stream(ifd)[-1]
@@ -33,8 +46,9 @@ def add_morphology(target, source, env):
             morphology[word] = set()
             for analysis in analyses.split(", "):
                 morphology[word].add(tuple([morph.split(":")[0] for morph in analysis.split() if not morph.startswith("~")]))
+
     #print [[(data.indexToWord[w], data.indexToTag.get(t, None), morphology.get(data.indexToWord[w], [])) for w, t, aa in s] for s in data.sentences][0:10]
-    new_data = DataSet.from_sentences([[(data.indexToWord[w], data.indexToTag.get(t, None), morphology.get(data.indexToWord[w], [])) for w, t, aa in s] for s in data.sentences])
+    new_data = DataSet.from_sentences([[(data.indexToWord[w], data.indexToTag.get(t, None), get_without_case(data.indexToWord[w], morphology)) for w, t, aa in s] for s in data.sentences])
     with meta_open(target[0].rstr(), "w") as ofd:
         new_data.write(ofd)
     return None
