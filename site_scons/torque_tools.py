@@ -83,8 +83,6 @@ def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stde
         out, err = process.communicate()
     return out, err, process.returncode == 0
 
-
-
 def submit_job(target, source, env):
     if env["HAS_TORQUE"]:
         args = source[-1].read()
