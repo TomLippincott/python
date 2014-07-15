@@ -262,8 +262,7 @@ def run_pycfg_torque(target, source, env):
                              "walltime" : "20:00:00",
                          },
                          )
-        job.submit(commit=False)
-        print job
+        job.submit(commit=True)
         jobs.append(job)
     running = torque.get_jobs(True)
     while any([job.job_id in [x[0] for x in running] for job in jobs]):
