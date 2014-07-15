@@ -16,7 +16,7 @@ import tarfile
 import operator
 from random import randint
 from subprocess import Popen, PIPE
-from common_tools import meta_open, DataSet
+from common_tools import meta_open, DataSet, v_measure
 from itertools import product
 #import numpy
 #from torque_tools import submit_job
@@ -287,21 +287,20 @@ def collate_tagging_output(target, source, env):
             ofd.write(" ".join(["%s/%d/%s" % (word, tag, word) for word, tag in sentence]) + "\n")
     return None
 
-def collate_morphology_output(target, source, env):
+def morphology_output_to_emma(target, source, env):
     analyses = {}
     with meta_open(source[0].rstr()) as ifd:
-        for line in ifd:
-            if not re.match(r"^\s*$", line):
-                prefix_str, stem_str, suffix_str = re.match(r"^.*\(Prefix(.*)\(Stem(.*)\(Suffix(.*)$", line).groups()
-                prefix = "".join([x.groups()[0] for x in re.finditer(r"\(Char (\S)\)", prefix_str)])
-                stem = "".join([x.groups()[0] for x in re.finditer(r"\(Char (\S)\)", stem_str)])
-                suffix = "".join([x.groups()[0] for x in re.finditer(r"\(Char (\S)\)", suffix_str)])
-                word = prefix + stem + suffix
-                if not re.match(r"^\s*$", word):
-                    analyses[word] = analyses.get(word, []) + [(prefix, stem, suffix)]
+        for m in re.finditer(r"\(Prefix(.*?)\(Stem(.*?)\(Suffix(.*?)(\(Word|$)", ifd.read(), re.S|re.M):
+            prefix_str, stem_str, suffix_str, rem = m.groups()
+            prefix = "".join([x.groups()[0] for x in re.finditer(r"\(Char (\S)\)", prefix_str)])
+            stem = "".join([x.groups()[0] for x in re.finditer(r"\(Char (\S)\)", stem_str)])
+            suffix = "".join([x.groups()[0] for x in re.finditer(r"\(Char (\S)\)", suffix_str)])
+            word = prefix + stem + suffix
+            if not re.match(r"^\s*$", word):
+                analyses[word] = analyses.get(word, []) + [(prefix, stem, suffix)]
     with meta_open(target[0].rstr(), "w") as ofd:
         for w, aa in analyses.iteritems():
-            ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s:NULL" % m for m in a if m != ""]) for a in aa])))
+            ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s:NULL" % m for m in a if m != ""]) for a in set(aa)])))
     return None
 
 def collate_joint_output(target, source, env):
@@ -327,12 +326,23 @@ def torque_key(action, env, target, source):
     return 1
 
 def evaluate_tagging(env, *args, **kw):
+    target, (source, train) = args
     return None
 
 def evaluate_morphology(env, *args, **kw):
+    target, (source, train) = args
+    gold_morphology = env.subst("data/${LANGUAGE}_morphology.txt")
+    if os.path.exists(gold_morphology):
+        emma = env.MorphologyOutputToEMMA("%s-emma" % target, source)    
+        morphology_results = env.RunEMMA(target, [gold_morphology, emma])
     return None
 
 def evaluate_joint(env, *args, **kw):
+    target, (source, train) = args
+    gold_morphology = env.subst("data/${LANGUAGE}_morphology.txt")
+    if os.path.exists(gold_morphology):
+        emma = env.MorphologyOutputToEMMA("%s-emma" % target, source)
+        morphology_results = env.RunEMMA(target, [gold_morphology, emma])
     return None
 
 def TOOLS_ADD(env):
@@ -344,7 +354,7 @@ def TOOLS_ADD(env):
         "GoldTagsJointCFG" : Builder(action=gold_tags_joint_cfg),
         "GoldSegmentationsJointCFG" : Builder(action=gold_segmentations_joint_cfg),
         "CollateTaggingOutput" : Builder(action=collate_tagging_output),
-        "CollateMorphologyOutput" : Builder(action=collate_morphology_output),
+        "MorphologyOutputToEMMA" : Builder(action=morphology_output_to_emma),
         "CollateJointOutput" : Builder(action=collate_joint_output),
     })
     if env["HAS_TORQUE"] == True:
