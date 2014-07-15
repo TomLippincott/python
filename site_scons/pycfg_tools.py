@@ -258,11 +258,12 @@ def run_pycfg_torque(target, source, env):
                          array=0,
                          other=["#PBS -W group_list=yeticcls"],
                          resources={
-                             "cput" : "11:00:00",
-                             "walltime" : "11:00:00",
+                             "cput" : "20:00:00",
+                             "walltime" : "20:00:00",
                          },
                          )
-        job.submit(commit=True)
+        job.submit(commit=False)
+        print job
         jobs.append(job)
     running = torque.get_jobs(True)
     while any([job.job_id in [x[0] for x in running] for job in jobs]):
