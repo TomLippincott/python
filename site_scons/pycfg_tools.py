@@ -30,7 +30,7 @@ def format_rules(rules):
             lines.append("%s --> %s" % (rule[0], targets))
         elif len(rule) == 4:
             lines.append("%s %s %s --> %s" % (rule[0], rule[1], rule[2], targets))
-    return "\n".join(lines)
+    return "\n".join(lines).encode("utf-8")
 
 def morphology_cfg(target, source, env):
     args = source[-1].read()
@@ -69,7 +69,7 @@ def morphology_cfg(target, source, env):
     with meta_open(target[0].rstr(), "w") as ofd:
         ofd.write(format_rules(rules))
     with meta_open(target[1].rstr(), "w") as ofd:
-        ofd.write("\n".join(["^^^ %s $$$" % (" ".join([c for c in w])) for w in words]))
+        ofd.write("\n".join(["^^^ %s $$$" % (" ".join([c for c in w])) for w in words]).encode("utf-8"))
     return None
 
 def tagging_cfg(target, source, env):
@@ -91,7 +91,7 @@ def tagging_cfg(target, source, env):
         ofd.write(format_rules(rules))
     with meta_open(target[1].rstr(), "w") as ofd:
         sentences = [" ".join([data.indexToWord[w] for w, t, m in s]) for s in data.sentences if len(s) < 20]
-        ofd.write("\n".join([s for s in sentences]))
+        ofd.write("\n".join([s for s in sentences]).encode("utf-8").strip())
     return None
 
 def joint_cfg(target, source, env):
@@ -133,8 +133,8 @@ def joint_cfg(target, source, env):
     with meta_open(target[0].rstr(), "w") as ofd:
         ofd.write(format_rules(rules))
     with meta_open(target[1].rstr(), "w") as ofd:
-        lines = [" ".join([" ".join(["^^^"] + [c for c in data.indexToWord[w]] + ["$$$"]) for w, t, m in s]) for s in data.sentences if len(s) < 30]
-        ofd.write("\n".join([l for l in lines]))
+        lines = [" ".join([" ".join(["^^^"] + [c for c in data.indexToWord[w]] + ["$$$"]) for w, t, m in s]) for s in data.sentences if len(s) < 20]
+        ofd.write("\n".join([l for l in lines]).encode("utf-8").strip())
     return None
 
 def gold_segmentations_joint_cfg(target, source, env):
@@ -256,7 +256,11 @@ def run_pycfg_torque(target, source, env):
                          stdout_path=os.path.abspath("torque"),
                          stderr_path=os.path.abspath("torque"),
                          array=0,
-                         other=[],
+                         other=["#PBS -W group_list=yeticcls"],
+                         resources={
+                             "cput" : "11:00:00",
+                             "walltime" : "11:00:00",
+                         },
                          )
         job.submit(commit=True)
         jobs.append(job)
