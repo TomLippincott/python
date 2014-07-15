@@ -236,8 +236,10 @@ def gold_tags_joint_cfg(target, source, env):
         ofd.write("\n".join([" ".join([" ".join(["^^^%s" % t] + [c for c in w] + ["$$$%s" % t]) for w, t in s]) for s in sentences]))
     return None
 
+cmd = "zcat ${SOURCES[1].abspath}|${PYCFG_PATH}/py-cfg ${SOURCES[0].abspath} -w 0.1 -A ${TARGETS[0].abspath} -N 1 -d 100 -E -n ${NUM_BURNINS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} > ${TARGETS[1].abspath}"
+
 def run_pycfg(target, source, env, for_signature):
-    return env.subst("zcat ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -A ${TARGETS[0]} -N 1 -d 100 -E -n ${NUM_BURNINS} -e 1 -f 1 -g 10 -h 0.1 > ${TARGETS[1]}", target=target, source=source)
+    return env.subst(cmd, target=target, source=source)
 
 def list_to_tuples(xs):
     return [(xs[i * 2], xs[i * 2 + 1]) for i in range(len(xs) / 2)]
@@ -246,7 +248,6 @@ def run_pycfg_torque(target, source, env):
     """
     Pairs of inputs and outputs
     """
-    cmd = "zcat ${SOURCES[1].abspath}|${PYCFG_PATH}/py-cfg ${SOURCES[0].abspath} -w 0.1 -A ${TARGETS[0].abspath} -N 1 -d 100 -E -n ${NUM_BURNINS} -e 1 -f 1 -g 10 -h 0.1 > ${TARGETS[1].abspath}"
     jobs = []
     interval = 30
     for (cfg, data), (out, log) in zip(list_to_tuples(source), list_to_tuples(target)):
@@ -258,8 +259,8 @@ def run_pycfg_torque(target, source, env):
                          array=0,
                          other=["#PBS -W group_list=yeticcls"],
                          resources={
-                             "cput" : "20:00:00",
-                             "walltime" : "20:00:00",
+                             "cput" : "40:00:00",
+                             "walltime" : "40:00:00",
                          },
                          )
         job.submit(commit=True)
@@ -365,3 +366,4 @@ def TOOLS_ADD(env):
     env.AddMethod(evaluate_tagging, "EvaluateTagging")
     env.AddMethod(evaluate_morphology, "EvaluateMorphology")
     env.AddMethod(evaluate_joint, "EvaluateJoint")
+    
