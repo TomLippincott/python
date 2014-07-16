@@ -241,8 +241,9 @@ cmd = "zcat ${SOURCES[1].abspath}|${PYCFG_PATH}/py-cfg ${SOURCES[0].abspath} -w 
 def run_pycfg(target, source, env, for_signature):
     return env.subst(cmd, target=target, source=source)
 
-def list_to_tuples(xs):
-    return [(xs[i * 2], xs[i * 2 + 1]) for i in range(len(xs) / 2)]
+def list_to_tuples(xs, n=2):
+    return [[xs[i * n + j] for j in range(n)] for i in range(len(xs) / n)]
+#(xs[i * n], xs[i * n + 1]) for i in range(len(xs) / 2)]
 
 def run_pycfg_torque(target, source, env):
     """
@@ -250,7 +251,7 @@ def run_pycfg_torque(target, source, env):
     """
     jobs = []
     interval = 30
-    for (cfg, data), (out, grammar, log) in zip(list_to_tuples(source), list_to_tuples(target)):
+    for (cfg, data), (out, grammar, log) in zip(list_to_tuples(source), list_to_tuples(target, 3)):
         job = torque.Job("py-cfg",
                          commands=[env.subst(cmd, target=[out, grammar, log], source=[cfg, data])],
                          #path=args["path"],
