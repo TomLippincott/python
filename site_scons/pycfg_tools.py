@@ -250,9 +250,9 @@ def run_pycfg_torque(target, source, env):
     """
     jobs = []
     interval = 30
-    for (cfg, data), (out, log) in zip(list_to_tuples(source), list_to_tuples(target)):
+    for (cfg, data), (out, grammar, log) in zip(list_to_tuples(source), list_to_tuples(target)):
         job = torque.Job("py-cfg",
-                         commands=[env.subst(cmd, target=[out, log], source=[cfg, data])],
+                         commands=[env.subst(cmd, target=[out, grammar, log], source=[cfg, data])],
                          #path=args["path"],
                          stdout_path=os.path.abspath("torque"),
                          stderr_path=os.path.abspath("torque"),
