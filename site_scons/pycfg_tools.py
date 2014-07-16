@@ -236,7 +236,7 @@ def gold_tags_joint_cfg(target, source, env):
         ofd.write("\n".join([" ".join([" ".join(["^^^%s" % t] + [c for c in w] + ["$$$%s" % t]) for w, t in s]) for s in sentences]))
     return None
 
-cmd = "zcat ${SOURCES[1].abspath}|${PYCFG_PATH}/py-cfg ${SOURCES[0].abspath} -w 0.1 -A ${TARGETS[0].abspath} -N 1 -d 100 -E -n ${NUM_BURNINS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} > ${TARGETS[1].abspath}"
+cmd = "zcat ${SOURCES[1].abspath}|${PYCFG_PATH}/py-cfg ${SOURCES[0].abspath} -w 0.1 -A ${TARGETS[0].abspath} -N 1 -d 100 -E -n ${NUM_BURNINS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -G ${TARGETS[1]} > ${TARGETS[2].abspath}"
 
 def run_pycfg(target, source, env, for_signature):
     return env.subst(cmd, target=target, source=source)
