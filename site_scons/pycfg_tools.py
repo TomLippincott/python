@@ -301,7 +301,7 @@ def morphology_output_to_emma(target, source, env):
             if not re.match(r"^\s*$", word):
                 analyses[word] = analyses.get(word, []) + [(prefix, stem, suffix)]
     with meta_open(target[0].rstr(), "w") as ofd:
-        for w, aa in analyses.iteritems():
+        for w, aa in sorted(analyses.iteritems()):
             ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s:NULL" % m for m in a if m != ""]) for a in set(aa)])))
     return None
 
@@ -336,7 +336,7 @@ def evaluate_morphology(env, *args, **kw):
     gold_morphology = env.subst("data/${LANGUAGE}_morphology.txt")
     if os.path.exists(gold_morphology):
         emma = env.MorphologyOutputToEMMA("%s-emma" % target, source)    
-        morphology_results = env.RunEMMA(target, [gold_morphology, emma])
+        morphology_results = env.RunEMMA(target, [emma, gold_morphology])
     return None
 
 def evaluate_joint(env, *args, **kw):
@@ -344,7 +344,7 @@ def evaluate_joint(env, *args, **kw):
     gold_morphology = env.subst("data/${LANGUAGE}_morphology.txt")
     if os.path.exists(gold_morphology):
         emma = env.MorphologyOutputToEMMA("%s-emma" % target, source)
-        morphology_results = env.RunEMMA(target, [gold_morphology, emma])
+        morphology_results = env.RunEMMA(target, [emma, gold_morphology])
     return None
 
 def TOOLS_ADD(env):
