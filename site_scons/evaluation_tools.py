@@ -158,7 +158,7 @@ def oov_reduction(target, source, env):
         ofd.write("\n".join(["\t".join([str(int(y)) for y in [total_oov_tokens, total_oov_types] + x]) for x in values[1:]]) + "\n")
     return None
 
-def evaluate_tagging(target, source, env):
+def evaluate_tagging_vm(target, source, env):
     with meta_open(source[0].rstr()) as gold_fd, meta_open(source[1].rstr()) as pred_fd:
         gold = DataSet.from_stream(gold_fd)[-1]
         preds = DataSet.from_stream(pred_fd)
@@ -248,7 +248,7 @@ def random_tags(target, source, env):
 
 def TOOLS_ADD(env):
     env.Append(BUILDERS = {
-            "EvaluateTagging" : Builder(action=evaluate_tagging),
+            "EvaluateTaggingVM" : Builder(action=evaluate_tagging_vm),
             "EvaluateMorphology" : Builder(action=evaluate_morphology),
             "PlotReduction" : Builder(action=plot_reduction),
             "TopWords" : Builder(action=top_words),

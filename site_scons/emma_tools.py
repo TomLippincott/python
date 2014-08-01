@@ -1,4 +1,5 @@
 from SCons.Builder import Builder
+from SCons.Util import is_List
 import re
 from glob import glob
 from functools import partial
@@ -12,7 +13,11 @@ import xml.etree.ElementTree as et
 from subprocess import Popen, PIPE
 
 def emma_score(env, target, gold, predictions):
-    gold_emma = env.DatasetToEMMA("%s-emma" % gold[0], gold)
+    if is_List(gold):
+        gold = gold[0]
+    if is_List(predictions):
+        predictions = predictions[0]
+    gold_emma = env.DatasetToEMMA("%s-emma" % gold, gold)
     pred_emma = env.DatasetToEMMA("%s-emma" % predictions, predictions)
     return env.RunEMMA(target, [gold_emma, pred_emma])
     # with meta_open(source[0].rstr()) as gold_ifd, meta_open(source[1].rstr()) as pred_ifd:
@@ -52,13 +57,17 @@ def add_morphology(target, source, env):
     with meta_open(target[0].rstr(), "w") as ofd:
         new_data.write(ofd)
     return None
-
+    
 def dataset_to_emma(target, source, env):
     with meta_open(source[0].rstr()) as ifd:
         data = DataSet.from_stream(ifd)[-1]
     with meta_open(target[0].rstr(), "w") as ofd:
         for word, analyses in sorted(data.get_analyses().iteritems()):
-            x = "%s\t%s\n" % (word, ", ".join([" ".join(["%s:NULL" % m for m in a]) for a in analyses]))
+            word = word.lower()
+            if len(analyses) == 0:
+                x = "%s\t%s:NULL\n" % (word, word) #", ".join([" ".join(["%s:NULL" % m for m in a]) for a in analyses]))
+            else:
+                x = "%s\t%s\n" % (word, ", ".join([" ".join(["%s:NULL" % m.lower() for m in a]) for a in analyses]))            
             ofd.write(x.encode("utf-8"))
     return None
 

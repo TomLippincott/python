@@ -49,7 +49,6 @@ class DataSet():
         assert(all([isinstance(x, basestring) for x in indexToTag.values()]))
         assert(all([isinstance(x, int) for x in indexToAnalysis.keys()]))
         assert(all([isinstance(x, tuple) for x in indexToAnalysis.values()]))
-        #print indexToAnalysis.values()
         assert(all([all([isinstance(y, basestring) for y in x]) for x in indexToAnalysis.values()]))        
         self.sentences = sentences
         self.indexToWord = indexToWord
