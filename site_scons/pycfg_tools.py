@@ -1,4 +1,6 @@
 from SCons.Script import Builder
+from SCons.Subst import scons_subst
+from SCons.Action import CommandAction, CommandGeneratorAction
 import re
 from glob import glob
 import logging
@@ -9,6 +11,7 @@ from common_tools import meta_open, DataSet, v_measure
 from itertools import product
 import torque
 from subprocess import Popen, PIPE
+from torque_tools import TorqueCommandBuilder
 
 def format_rules(rules):
     lines = []
@@ -16,16 +19,46 @@ def format_rules(rules):
         targets = " ".join(rule[-1])
         if len(rule) == 2:
             lines.append("%s --> %s" % (rule[0], targets))
+        elif len(rule) == 3:
+            lines.append("%s %s --> %s" % (rule[0], rule[1], targets))
         elif len(rule) == 4:
             lines.append("%s %s %s --> %s" % (rule[0], rule[1], rule[2], targets))
     return "\n".join(lines).encode("utf-8")
+
+def ngram_cfg(target, source, env):
+    args = source[-1].read()
+    n = args.get("n", 2)
+    nulls = ["$$$" for i in range(n)]
+    with meta_open(source[0].rstr()) as ifd:
+        dataset = DataSet.from_stream(ifd)[0]
+    if args.get("token_based", False):
+        words = sum([[dataset.indexToWord[wid] for wid, tid, aids in s] for s in dataset.sentences], [])
+    else:
+        words = dataset.indexToWord.values()
+    if args.get("lowercase", False):
+        words = [nulls + [c for c in w.lower()] + nulls for w in words]
+    else:
+        words = [nulls + [c for c in w] + nulls for w in words]
+    chars = set(sum(words, []))
+    rules = [
+        (1, "Word", ["$$$_$$$"]),
+    ]
+    for first in chars:
+        for second in chars:
+            #rules.append(("" % (first, second)
+            pass
+    with meta_open(target[0].rstr(), "w") as ofd:
+        ofd.write(format_rules(rules))
+    with meta_open(target[1].rstr(), "w") as ofd:
+        ofd.write("\n".join([" ".join(w) for w in words]).encode("utf-8"))
+    return None
 
 def morphology_cfg(target, source, env):
     args = source[-1].read()
     with meta_open(source[0].rstr()) as ifd:
         data = DataSet.from_stream(ifd)[0]
         words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences if len(s) < env["MAXIMUM_SENTENCE_LENGTH"]], []) if re.match(r"^[a-zA-Z]+$", word)]
-        if args["LOWER_CASE_MORPHOLOGY"]:
+        if args.get("LOWER_CASE_MORPHOLOGY", False):
             words = [w.lower() for w in words]
         characters = set(sum([[c for c in w] for w in words], []))
     num_syntactic_classes = args.get("num_syntactic_classes", 1)
@@ -168,7 +201,9 @@ def gold_segmentations_joint_cfg(target, source, env):
         ofd.write(format_rules(rules))
         #ofd.write("\n".join(["%s --> %s" % (k, " ".join(v)) for k, v in rules]))
     with meta_open(target[1].rstr(), "w") as ofd:
-        ofd.write("\n".join([" ".join([" ".join(["^^^"] + [c for c in pre] + ["@@@"] + [c for c in stm] + ["@@@"] + [c for c in suf] + ["$$$"]) for w, (pre, stm, suf) in s]) for s in sentences]))
+        #ofd.write("\n".join([" ".join([" ".join(["^^^"] + [c for c in pre] + ["@@@"] + [c for c in stm] + ["@@@"] + [c for c in suf] + ["$$$"]) for w, (pre, stm, suf) in s]) for s in sentences]))
+        lines = [" ".join([" ".join(["^^^"] + [c for c in pre] + ["@@@"] + [c for c in stm] + ["@@@"] + [c for c in suf] + ["$$$"]) for w, (pre, stm, suf) in s]) for s in sentences]
+        ofd.write("\n".join([l for l in lines]).encode("utf-8").strip())
 
     return None
 
@@ -218,13 +253,18 @@ def gold_tags_joint_cfg(target, source, env):
         ofd.write(format_rules(rules))
         #ofd.write("\n".join(["%s --> %s" % (k, " ".join(v)) for k, v in rules]))
     with meta_open(target[1].rstr(), "w") as ofd:
-        ofd.write("\n".join([" ".join([" ".join(["^^^%s" % t] + [c for c in w] + ["$$$%s" % t]) for w, t in s]) for s in sentences]))
+        #ofd.write("\n".join([" ".join([" ".join(["^^^%s" % t] + [c for c in w] + ["$$$%s" % t]) for w, t in s]) for s in sentences]))
+        lines = [" ".join([" ".join(["^^^%s" % t] + [c for c in w] + ["$$$%s" % t]) for w, t in s]) for s in sentences]
+        ofd.write("\n".join([l for l in lines]).encode("utf-8").strip())
     return None
 
-cmd = "zcat ${SOURCES[1].abspath}|${PYCFG_PATH}/py-cfg ${SOURCES[0].abspath} -w 0.1 -N 1 -d 100 -E -n ${NUM_BURNINS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -x 5 -G ${TARGETS[1]} -F ${TARGETS[2]} > ${TARGETS[3].abspath}"
+#cmd = "cat ${SOURCES[1].abspath}|${PYCFG_PATH}/py-cfg ${SOURCES[0].abspath} -w 0.1 -N 1 -d 100 -E -n ${NUM_BURNINS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -x 5 -G ${TARGETS[1]} -F ${TARGETS[2]}"
 
-def run_pycfg(target, source, env, for_signature):
-    return env.subst(cmd, target=target, source=source)
+#def run_pycfg(target, source, env, for_signature):
+#    if source[1].rstr().endswith("z"):
+#        return env.subst("z%s" % cmd, target=target, source=source)    
+#    else:
+#        return env.subst(cmd, target=target, source=source)
 
 def list_to_tuples(xs, n=2):
     return [[xs[i * n + j] for j in range(n)] for i in range(len(xs) / n)]
@@ -276,14 +316,11 @@ def collate_tagging_output(target, source, env):
 def morphology_output_to_emma(target, source, env):
     analyses = {}
     with meta_open(source[0].rstr()) as ifd:
-        for m in re.finditer(r"\(Prefix(.*?)\(Stem(.*?)\(Suffix(.*?)(\(Word|$)", ifd.read(), re.S|re.M):
-            prefix_str, stem_str, suffix_str, rem = m.groups()
-            prefix = "".join([x.groups()[0] for x in re.finditer(r"\(Char (\S)\)", prefix_str)])
-            stem = "".join([x.groups()[0] for x in re.finditer(r"\(Char (\S)\)", stem_str)])
-            suffix = "".join([x.groups()[0] for x in re.finditer(r"\(Char (\S)\)", suffix_str)])
-            word = prefix + stem + suffix
+        for line in ifd:
+            toks = tuple(["".join([y.group(1) for y in re.finditer("Char ([^\)]+)", x)]) for x in re.split(r"Prefix|Stem|Suffix", line)[1:]])
+            word = "".join(toks)
             if not re.match(r"^\s*$", word):
-                analyses[word] = analyses.get(word, []) + [(prefix, stem, suffix)]
+                analyses[word] = analyses.get(word, []) + [toks]
     with meta_open(target[0].rstr(), "w") as ofd:
         for w, aa in sorted(analyses.iteritems()):
             ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s:NULL" % m for m in a if m != ""]) for a in set(aa)])))
@@ -308,8 +345,7 @@ def collate_joint_output(target, source, env):
             ofd.write(" ".join(["%s/%d/%s+%s+%s" % (word, tag, prefix, stem, suffix) for tag, prefix, stem, suffix, word in sentence]) + "\n")
     return None
 
-def torque_key(action, env, target, source):
-    return 1
+
 
 def tagging_output_to_dataset(target, source, env):
     with meta_open(source[0].rstr()) as ifd:
@@ -334,11 +370,11 @@ def evaluate_tagging(env, *args, **kw):
     return None
     
 def evaluate_morphology(env, *args, **kw):
-    target, (source, train) = args
-    gold_morphology = env.subst("data/${LANGUAGE}_morphology.txt")
-    if os.path.exists(gold_morphology):
-        emma = env.MorphologyOutputToEMMA("%s-emma" % target, source)    
-        morphology_results = env.RunEMMA(target, [emma, gold_morphology])
+    parses, training, gold_morphology = args
+    emma_output = "work/emma/%s" % os.path.basename(parses.rstr())
+    eval_output = "work/evaluation/%s" % os.path.basename(parses.rstr())
+    emma = env.MorphologyOutputToEMMA(emma_output, parses)
+    morphology_results = env.RunEMMA(eval_output, [emma, gold_morphology])
     return None
 
 def evaluate_joint(env, *args, **kw):
@@ -384,11 +420,69 @@ def evaluate_many_morphology(target, source, env):
 
     return None
 
+def make_command_builder(command, targets, arg_names, directory):
+    def generator(target, source, env, for_signature):
+        args = source[-1].read()
+        return scons_subst(command, env, target=target, source=source, lvars=args, gvars=env.gvars())
+    def emitter(target, source, env):
+        args = source[-1].read()
+        spec = "_".join(["%s=%s" % (n, args.get(n, None)) for n in arg_names])
+        new_target = [os.path.join(directory, "%s_%s.txt" % (t, spec)) for t in targets]
+        return new_target, source
+    return Builder(generator=generator, emitter=emitter)
 
+def extract_affixes(target, source, env):
+    prefixes, suffixes = {}, {}
+    with meta_open(source[0].rstr()) as ifd:
+        data = DataSet.from_stream(ifd)[0]
+        
+    for a in data.indexToAnalysis.values():
+        if len(a) > 1:
+            a = map(lambda x : x.lower(), a)
+            lengths = map(len, a)
+            mlen = max(lengths)
+            mind = lengths.index(mlen)
+            pre = a[0:mind]
+            suf = a[mind + 1:]                        
+            if len(pre) > 0:
+                pre = re.sub(r"[^\w]", "", pre[0])
+                prefixes[pre] = prefixes.get(pre, 0) + 1
+            if len(suf) > 0:
+                suf = re.sub(r"[^\w]", "", suf[-1])
+                suffixes[suf] = suffixes.get(suf, 0) + 1
+    for fname, affixes in zip(target, [prefixes, suffixes]):
+        with meta_open(fname.rstr(), "w") as ofd:
+            ofd.write("\n".join(["%d\t%s" % (c, a) for a, c in sorted(affixes.iteritems(), lambda x, y : cmp(y[1], x[1]))]))
+    return None
+
+def pycfg_generator(target, source, env, for_signature):
+    if source[1].rstr().endswith("gz"):
+        cat = "zcat"
+    else:
+        cat = "cat"
+    return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]}" % cat
+
+def pycfg_emitter(target, source, env):
+    new_target = ["%s_%s.txt" % (target[0].rstr(), x) for x in ["parse", "grammar", "trace"]]
+    return new_target, source
 
 def TOOLS_ADD(env):
-    env["PYCFG_PATH"] = "/usr/local/py-cfg-quad"
+    env["PYCFG_PATH"] = "/usr/local/py-cfg"
     env.Append(BUILDERS = {
+        "ExtractAffixes" : Builder(action=extract_affixes),
+        "CreateMorphologyModel" : make_command_builder("${CABAL}/bin/create_model ${MODEL} -i ${SOURCES[0]} -m ${TARGETS[0]} -d ${TARGETS[1]} ${HAS_PREFIXES and '--hasprefixes' or ''} ${HAS_SUFFIXES and '--hassuffixes' or ''} -k ${KEEP} --prefixfile ${SOURCES[1]} --suffixfile ${SOURCES[2]}", 
+                                             ["Model", "Data"], 
+                                             ["LANGUAGE", "MODEL", "HAS_PREFIXES", "HAS_SUFFIXES", "KEEP"], 
+                                             "work/models"),
+
+
+        "CreateNgramModel" : make_command_builder("${CABAL}/bin/create_model ${MODEL} -i ${SOURCES[0]} -m ${TARGETS[0]} -d ${TARGETS[1]} -n ${N}", 
+                                                  ["Model", "Data"], 
+                                                  ["LANGUAGE", "N"], 
+                                                  "work/models"),
+
+
+        "NGram" : Builder(action=ngram_cfg),
         "MorphologyCFG" : Builder(action=morphology_cfg),
         "TaggingCFG" : Builder(action=tagging_cfg),
         "JointCFG" : Builder(action=joint_cfg),
@@ -400,14 +494,45 @@ def TOOLS_ADD(env):
         "TaggingOutputToDataset" : Builder(action=tagging_output_to_dataset),
         "EvaluateManyMorphology" : Builder(action=evaluate_many_morphology),
     })
+    pycfg_action = CommandGeneratorAction(pycfg_generator, {})
+    #print x
+
     if env["HAS_TORQUE"] == True:
-        runner = Builder(action=SCons.Action.Action(run_pycfg_torque, batch_key=torque_key))
+        pycfg_builder = TorqueCommandBuilder(action=pycfg_action, emitter=pycfg_emitter)
+        #runner = make_torque_command_builder("cat ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]}",
+        #                              ["Parses", "Grammar", "Trace"],
+        #                              ["LANGUAGE", "MODEL", "HAS_PREFIXES", "HAS_SUFFIXES", "KEEP"], 
+        #                              "work/pycfg_output")
     else:
-        runner = Builder(generator=run_pycfg)
-    env.Append(BUILDERS = {"RunPYCFG" : runner})
+        pycfg_builder = Builder(action=pycfg_action, emitter=pycfg_emitter)
+        #runner = make_command_builder("cat ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]}",
+        #                              ["Parses", "Grammar", "Trace"],
+        #                              ["LANGUAGE", "MODEL", "HAS_PREFIXES", "HAS_SUFFIXES", "KEEP"], 
+        #                              "work/pycfg_output")
+    env.Append(BUILDERS = {"RunPYCFG" : pycfg_builder})
     env.AddMethod(evaluate_tagging, "EvaluateTagging")
     env.AddMethod(evaluate_tagging, "EvaluateGoldSegmentationsJoint")
     env.AddMethod(evaluate_morphology, "EvaluateMorphology")
     env.AddMethod(evaluate_morphology, "EvaluateGoldTagsJoint")
     env.AddMethod(evaluate_joint, "EvaluateJoint")
-    
+
+#  -N nanal-its    -- print analyses during last nanal-its iterations
+#  -C              -- print compact trees omitting uncached categories
+#  -D              -- delay grammar initialization until all sentences are parsed
+#  -E              -- estimate rule prob (theta) using Dirichlet prior
+#  -H              -- skip Hastings correction of tree probabilities
+#  -I              -- parse sentences in order (default is random order)
+#  -P              -- use a predictive Earley parse to filter useless categories
+#  -R nr           -- resample PY cache strings during first nr iterations (-1 = forever)
+#  -r rand-init    -- initializer for random number generator (integer)
+#  -a a            -- default PY a parameter
+#  -b b            -- default PY b parameter
+#  -e pya-beta-a   -- if positive, parameter of Beta prior on pya; if negative, number of iterations to anneal pya
+#  -f pya-beta-b   -- if positive, parameter of Beta prior on pya
+#  -g pyb-gamma-s  -- if non-zero, parameter of Gamma prior on pyb
+#  -h pyb-gamma-c  -- parameter of Gamma prior on pyb
+#  -w weight       -- default value of theta (or Dirichlet prior) in generator
+#  -s train_frac   -- train only on train_frac percentage of training sentences (ignore remainder)
+#  -S              -- randomise training fraction of sentences (default: training fraction is at front)
+#  -Z ztemp        -- temperature used just before stopping
+#  -z zits         -- perform zits iterations at temperature ztemp at end of run
