@@ -14,8 +14,8 @@ class Job():
         self.commands = commands
         self.path = os.path.abspath(path)
         self.array = array
-        self.resources["cput"] = resources.get("cput", "5:30:00")
-        self.resources["walltime"] = resources.get("walltime", "5:30:00")
+        self.resources["cput"] = resources.get("cput", "15:30:00")
+        self.resources["walltime"] = resources.get("walltime", "15:30:00")
         self.resources["mem"] = "4000mb"
         self.commands.append("exit 0")
         self.stdout_path = os.path.abspath(stdout_path)
@@ -25,9 +25,9 @@ class Job():
     def __str__(self):
         lines = ["#PBS -N %s" % self.name] + self.other + ["#PBS -l %s=%s" % (k, v) for k, v in self.resources.iteritems()]
         if self.stdout_path:
-            lines.append("#PBS -o %s" % os.path.join(self.stdout_path, "%s.out" % (self.name)))
+            lines.append("#PBS -o %s" % os.path.join(self.stdout_path, "%s-${PBS_JOBID}.out" % (self.name)))
         if self.stderr_path:
-            lines.append("#PBS -e %s" % os.path.join(self.stderr_path, "%s.err" % (self.name)))
+            lines.append("#PBS -e %s" % os.path.join(self.stderr_path, "%s-${PBS_JOBID}.err" % (self.name)))
         if self.dependencies:
             arrays = [x.job_id for x in self.dependencies if x.array > 0]
             nonarrays = [x.job_id for x in self.dependencies if x.array == 0]

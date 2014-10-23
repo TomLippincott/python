@@ -9,7 +9,10 @@ import os
 import cPickle as pickle
 import numpy
 import math
-import lxml.etree as et
+try:
+   import lxml.etree as et
+except:
+   import xml.etree.ElementTree as et
 import xml.sax
 import sys
 import gzip

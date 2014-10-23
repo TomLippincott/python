@@ -57,7 +57,7 @@ def morphology_cfg(target, source, env):
     args = source[-1].read()
     with meta_open(source[0].rstr()) as ifd:
         data = DataSet.from_stream(ifd)[0]
-        words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences if len(s) < env["MAXIMUM_SENTENCE_LENGTH"]], []) if re.match(r"^[a-zA-Z]+$", word)]
+        words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], [])] # if re.match(r"^[a-zA-Z]+$", word)]
         if args.get("LOWER_CASE_MORPHOLOGY", False):
             words = [w.lower() for w in words]
         characters = set(sum([[c for c in w] for w in words], []))
@@ -463,7 +463,7 @@ def pycfg_generator(target, source, env, for_signature):
     return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]}" % cat
 
 def pycfg_emitter(target, source, env):
-    new_target = ["%s_%s.txt" % (target[0].rstr(), x) for x in ["parse", "grammar", "trace"]]
+    new_target = ["work/pycfg_output/%s_%s.txt" % (os.path.basename(target[0].rstr()), x) for x in ["parse", "grammar", "trace"]]
     return new_target, source
 
 def TOOLS_ADD(env):

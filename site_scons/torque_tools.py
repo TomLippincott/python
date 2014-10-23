@@ -29,10 +29,11 @@ def TorqueCommandBuilder(**kw):
         cmd = env.subst(kw["action"].genstring(target, source, env), target=target, source=source)
         job = torque.Job("scons",
                          commands=[cmd],
-                         stdout_path="work",
-                         stderr_path="work",
+                         stdout_path="work/torque_output",
+                         stderr_path="work/torque_output",
                          other=["#PBS -W group_list=yeticcls"])
         job.submit(commit=True, hold=False)
+        interval = 120
         while job.job_id in [x[0] for x in torque.get_jobs(True)]:
             logging.info("sleeping...")
             time.sleep(interval)
