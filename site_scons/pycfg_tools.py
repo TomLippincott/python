@@ -7,11 +7,12 @@ import logging
 import os.path
 import os
 from os.path import join as pjoin
-from common_tools import meta_open, DataSet, v_measure
+from common_tools import meta_open, DataSet, v_measure, regular_word
 from itertools import product
 import torque
 from subprocess import Popen, PIPE
 from torque_tools import TorqueCommandBuilder
+from scons_tools import make_generic_emitter, make_command_builder
 
 def format_rules(rules):
     lines = []
@@ -57,22 +58,41 @@ def morphology_cfg(target, source, env):
     args = source[-1].read()
     with meta_open(source[0].rstr()) as ifd:
         data = DataSet.from_stream(ifd)[0]
-        words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], [])] # if re.match(r"^[a-zA-Z]+$", word)]
+        words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)]
         if args.get("LOWER_CASE_MORPHOLOGY", False):
             words = [w.lower() for w in words]
         characters = set(sum([[c for c in w] for w in words], []))
     num_syntactic_classes = args.get("num_syntactic_classes", 1)
     rules = []
-    rules += [(1, 1, "Word", ["Prefix", "Stem", "Suffix"]),
-              ("Prefix", ["^^^", "Chars"]),
-              ("Prefix", ["^^^"]),
-              ("Stem", ["Chars"]),
-              ("Suffix", ["Chars", "$$$"]),
-              ("Suffix", ["$$$"]),
-          ]
-    rules += [(1, 1, "Chars", ["Char"]),
-              (1, 1, "Chars", ["Char", "Chars"]),
-              ]
+    rules += [
+        (1, 1, "Word", ["Prefix", "Stem", "Suffix"]),
+        ("Stem", ["Chars"]),
+        ("Prefix", ["^^^"]),
+        ("Suffix", ["$$$"]),            
+    ]
+
+    if args["IS_AGGLUTINATIVE"]:
+        internal = "Morphs"
+        rules += [
+            (1, 1, "Morphs", ["Morph"]),
+            (1, 1, "Morphs", ["Morph", "Morphs"]),
+            ("Morph", ["Chars"]),
+        ]
+    else:
+        internal = "Chars"
+
+    
+    if args["HAS_PREFIXES"]:
+        rules.append(("Prefix", ["^^^", internal]))
+
+    if args["HAS_SUFFIXES"]:
+        rules.append(("Suffix", [internal, "$$$"]))
+
+    rules += [
+        ("Stem", ["Chars"]),
+        (1, 1, "Chars", ["Char"]),
+        (1, 1, "Chars", ["Char", "Chars"]),
+    ]
     rules += [(0, 1, "Char", [character]) for character in characters]
     with meta_open(target[0].rstr(), "w") as ofd:
         ofd.write(format_rules(rules))
@@ -323,7 +343,8 @@ def morphology_output_to_emma(target, source, env):
                 analyses[word] = analyses.get(word, []) + [toks]
     with meta_open(target[0].rstr(), "w") as ofd:
         for w, aa in sorted(analyses.iteritems()):
-            ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s:NULL" % m for m in a if m != ""]) for a in set(aa)])))
+            if re.match(r"^\w+$", w) and not re.match(r"^.*\d.*$", w):
+                ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s:NULL" % m for m in a if m != ""]) for a in set(aa)])))
     return None
 
 def collate_joint_output(target, source, env):
@@ -420,16 +441,6 @@ def evaluate_many_morphology(target, source, env):
 
     return None
 
-def make_command_builder(command, targets, arg_names, directory):
-    def generator(target, source, env, for_signature):
-        args = source[-1].read()
-        return scons_subst(command, env, target=target, source=source, lvars=args, gvars=env.gvars())
-    def emitter(target, source, env):
-        args = source[-1].read()
-        spec = "_".join(["%s=%s" % (n, args.get(n, None)) for n in arg_names])
-        new_target = [os.path.join(directory, "%s_%s.txt" % (t, spec)) for t in targets]
-        return new_target, source
-    return Builder(generator=generator, emitter=emitter)
 
 def extract_affixes(target, source, env):
     prefixes, suffixes = {}, {}
@@ -483,13 +494,14 @@ def TOOLS_ADD(env):
 
 
         "NGram" : Builder(action=ngram_cfg),
-        "MorphologyCFG" : Builder(action=morphology_cfg),
+        "MorphologyCFG" : Builder(action=morphology_cfg,
+                                  emitter=make_generic_emitter(["work/ag_models/${SPEC}.txt", "work/ag_data/${SPEC}.txt"])),
         "TaggingCFG" : Builder(action=tagging_cfg),
         "JointCFG" : Builder(action=joint_cfg),
         "GoldTagsJointCFG" : Builder(action=gold_tags_joint_cfg),
         "GoldSegmentationsJointCFG" : Builder(action=gold_segmentations_joint_cfg),
         "CollateTaggingOutput" : Builder(action=collate_tagging_output),
-        "MorphologyOutputToEMMA" : Builder(action=morphology_output_to_emma),
+        "MorphologyOutputToEMMA" : Builder(action=morphology_output_to_emma, emitter=make_generic_emitter(["work/ag_emma_format/${SPEC}.txt"])),
         "CollateJointOutput" : Builder(action=collate_joint_output),
         "TaggingOutputToDataset" : Builder(action=tagging_output_to_dataset),
         "EvaluateManyMorphology" : Builder(action=evaluate_many_morphology),

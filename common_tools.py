@@ -32,6 +32,10 @@ try:
 except:
     import xml.etree.ElementTree as et
 
+def regular_word(w):
+    return not any(w.endswith(x) for x in ["-", "*", ">", "~"]) and "(" not in w
+
+
 def parse_location(l):
     word_id = int(l.find("word").get("id"))
     try:
@@ -78,6 +82,12 @@ class DataSet():
                        {v : k for k, v in tagToIndex.iteritems()},                       
                        {v : k for k, v in analysisToIndex.iteritems()})
 
+    def words(self):
+        return set(self.indexToWord.values())
+
+    def analyses(self, word):
+        return []
+    
     @staticmethod
     def from_xml(xml):
         indexToWord = {int(x.get("id")) : unicode(x.text) for x in xml.findall("preamble/word_inventory/entry")}

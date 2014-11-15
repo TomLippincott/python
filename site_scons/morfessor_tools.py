@@ -85,15 +85,18 @@ def morfessor_latin_gold(target, source, env):
     open(target[0].rstr(), "w").write("\n".join(["%s %s %d" % (l, f, c) for (l, f), c in sorted(data.iteritems())]))
     return None
 
+def evaluate_morfessor(target, source, env):
+    return None
+
 def TOOLS_ADD(env):
     env.Append(BUILDERS = {
-            "TrainMorfessor" : Builder(action=train_morfessor),
-            'MorfessorData' : Builder(action=morfessor_data_builder),
-            'MorfessorRun' : Builder(generator=morfessor_run_generator),
-            'MorfessorDisplayCounts' : Builder(generator=morfessor_display_counts_generator),
-            'MorfessorEstimateProbs' : Builder(generator=morfessor_estimate_probs_generator),
-            'MorfessorViterbiTag' : Builder(generator=morfessor_viterbitag_generator),
-            'MorfessorAlignSegmentations' : Builder(generator=morfessor_align_segmentations),
-            'MorfessorEvaluateTags' : Builder(generator=morfessor_evaluate_tags),
-            'MorfessorLatinGold' : Builder(action=morfessor_latin_gold),
-            })
+        "TrainMorfessor" : Builder(action=train_morfessor),
+        'MorfessorData' : Builder(action=morfessor_data_builder),
+        'MorfessorRun' : Builder(generator=morfessor_run_generator),
+        'MorfessorDisplayCounts' : Builder(generator=morfessor_display_counts_generator),
+        'MorfessorEstimateProbs' : Builder(generator=morfessor_estimate_probs_generator),
+        'MorfessorViterbiTag' : Builder(generator=morfessor_viterbitag_generator),
+        'MorfessorAlignSegmentations' : Builder(generator=morfessor_align_segmentations),
+        'MorfessorEvaluateTags' : Builder(generator=morfessor_evaluate_tags),
+        'MorfessorLatinGold' : Builder(action=morfessor_latin_gold),
+    })

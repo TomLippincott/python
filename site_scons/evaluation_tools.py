@@ -248,13 +248,13 @@ def random_tags(target, source, env):
 
 def TOOLS_ADD(env):
     env.Append(BUILDERS = {
-            "EvaluateTaggingVM" : Builder(action=evaluate_tagging_vm),
-            "EvaluateMorphology" : Builder(action=evaluate_morphology),
-            "PlotReduction" : Builder(action=plot_reduction),
-            "TopWords" : Builder(action=top_words),
-            "SplitExpansions" : Builder(action=split_expansion),
-            "OOVReduction" : Builder(action=oov_reduction),
-            "CollateOOVQuality" : Builder(action=collate_oov_quality),
-            "RandomSegmentations" : Builder(action=random_segmentations),
-            "RandomTags" : Builder(action=random_tags),
-            })
+        "EvaluateTaggingVM" : Builder(action=evaluate_tagging_vm),
+        #"EvaluateMorphology" : Builder(action=evaluate_morphology),
+        "PlotReduction" : Builder(action=plot_reduction),
+        "TopWords" : Builder(action=top_words),
+        "SplitExpansions" : Builder(action=split_expansion),
+        "OOVReduction" : Builder(action=oov_reduction),
+        "CollateOOVQuality" : Builder(action=collate_oov_quality),
+        "RandomSegmentations" : Builder(action=random_segmentations),
+        "RandomTags" : Builder(action=random_tags),
+    })
