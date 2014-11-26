@@ -5,7 +5,7 @@ from functools import partial
 import logging
 import os.path
 import os
-from common_tools import meta_open, DataSet
+from common_tools import meta_open, DataSet, regular_word
 import cPickle as pickle
 import numpy
 import math
@@ -27,9 +27,10 @@ def train_morfessor(target, source, env):
         dataset = DataSet.from_stream(ifd)[-1]
         for sentence in dataset.sentences:
             for word_id, tag_id, analysis_ids in sentence:
-                word = dataset.indexToWord[word_id]
-                words[word] = words.get(word, 0) + 1
-    model.load_data([(c, w, (w)) for w, c in words.iteritems()], args.freqthreshold, dampfunc, args.splitprob)
+                word = dataset.indexToWord[word_id].lower()
+                if regular_word(word):
+                    words[word] = words.get(word, 0) + 1
+    model.load_data([(1, w, (w)) for w, c in words.iteritems()], args.freqthreshold, dampfunc, args.splitprob)
     algparams = ()
     develannots = None
     e, c = model.train_batch(args.algorithm, algparams, develannots,

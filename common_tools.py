@@ -33,7 +33,7 @@ except:
     import xml.etree.ElementTree as et
 
 def regular_word(w):
-    return not any(w.endswith(x) for x in ["-", "*", ">", "~"]) and "(" not in w
+    return not any(w.endswith(x) for x in ["-", "*", ">", "~"]) and "(" not in w and "_" not in w
 
 
 def parse_location(l):

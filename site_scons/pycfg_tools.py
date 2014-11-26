@@ -61,21 +61,23 @@ def morphology_cfg(target, source, env):
         words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)]
         if args.get("LOWER_CASE_MORPHOLOGY", False):
             words = [w.lower() for w in words]
+        if args.get("TYPE_BASED", True):
+            words = set(words)
         characters = set(sum([[c for c in w] for w in words], []))
     num_syntactic_classes = args.get("num_syntactic_classes", 1)
     rules = []
     rules += [
-        (1, 1, "Word", ["Prefix", "Stem", "Suffix"]),
+        (0, 1, "Word", ["Prefix", "Stem", "Suffix"]),
         ("Stem", ["Chars"]),
         ("Prefix", ["^^^"]),
-        ("Suffix", ["$$$"]),            
+        (0, 1, "Suffix", ["$$$"]),            
     ]
 
     if args["IS_AGGLUTINATIVE"]:
         internal = "Morphs"
         rules += [
-            (1, 1, "Morphs", ["Morph"]),
-            (1, 1, "Morphs", ["Morph", "Morphs"]),
+            (0, 1, "Morphs", ["Morph"]),
+            (0, 1, "Morphs", ["Morph", "Morphs"]),
             ("Morph", ["Chars"]),
         ]
     else:
@@ -86,12 +88,12 @@ def morphology_cfg(target, source, env):
         rules.append(("Prefix", ["^^^", internal]))
 
     if args["HAS_SUFFIXES"]:
-        rules.append(("Suffix", [internal, "$$$"]))
+        rules.append((0, 1, "Suffix", [internal, "$$$"]))
 
     rules += [
         ("Stem", ["Chars"]),
-        (1, 1, "Chars", ["Char"]),
-        (1, 1, "Chars", ["Char", "Chars"]),
+        (0, 1, "Chars", ["Char"]),
+        (0, 1, "Chars", ["Char", "Chars"]),
     ]
     rules += [(0, 1, "Char", [character]) for character in characters]
     with meta_open(target[0].rstr(), "w") as ofd:
@@ -337,7 +339,8 @@ def morphology_output_to_emma(target, source, env):
     analyses = {}
     with meta_open(source[0].rstr()) as ifd:
         for line in ifd:
-            toks = tuple(["".join([y.group(1) for y in re.finditer("Char ([^\)]+)", x)]) for x in re.split(r"Prefix|Stem|Suffix", line)[1:]])
+            toks = tuple(["".join([y.group(1).replace(" ", "") for y in re.finditer("\(\S+ ([^\)\(]+)\)", x)]) for x in re.split(r"\(Prefix|\(Stem|\(Suffix", line)[1:]])
+            #toks = tuple(["".join([y.group(1) for y in re.finditer("\(\S+ ([^\)\(]+)\)", x)]) for x in re.split(r"\(Prefix|\(Stem|\(Suffix", line)[1:]])
             word = "".join(toks)
             if not re.match(r"^\s*$", word):
                 analyses[word] = analyses.get(word, []) + [toks]
@@ -466,11 +469,48 @@ def extract_affixes(target, source, env):
             ofd.write("\n".join(["%d\t%s" % (c, a) for a, c in sorted(affixes.iteritems(), lambda x, y : cmp(y[1], x[1]))]))
     return None
 
+def character_productions(target, source, env):
+    with meta_open(source[0].rstr()) as ifd:
+        data = DataSet.from_stream(ifd)[0]
+        words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)]
+        words = [w.lower() for w in words]
+        words = set(words)
+        characters = set(sum([[c for c in w] for w in words], []))
+    with meta_open(target[0].rstr(), "w") as ofd:
+        for c in characters:
+            ofd.write("0 1 Char --> %s\n" % (c.encode("utf-8")))
+    return None
+
+def compose_grammars(target, source, env):
+    with meta_open(target[0].rstr(), "w") as ofd:
+        for s in source:
+            with meta_open(s.rstr()) as ifd:
+                for l in ifd:
+                    if re.match(r"^\s*$", l) or l.strip().startswith("#"):
+                        continue
+                    elif "|" in l:
+                        lhs, rhs = re.match(r"^(.*) --> (.*)$", l.strip(), re.UNICODE).groups()
+                        for r in rhs.split("|"):
+                            x = ("%s --> %s\n" % (lhs, " ".join([c for c in r.strip()]))).encode("utf-8")
+                            ofd.write(x)
+                    else:
+                        ofd.write(l.strip() + "\n")
+    return None
+
+def morphology_data(target, source, env):
+    with meta_open(source[0].rstr()) as ifd:
+        data = DataSet.from_stream(ifd)[0]
+        words = set([word.lower() for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)])
+    with meta_open(target[0].rstr(), "w") as ofd:
+        ofd.write("\n".join([" ".join(["^^^"] + [c.encode("utf-8") for c in w] + ["$$$"]) for w in words]))
+    return None
+
 def pycfg_generator(target, source, env, for_signature):
     if source[1].rstr().endswith("gz"):
         cat = "zcat"
     else:
         cat = "cat"
+    # -w: default rule prob or dirichlet prior, -d debug level, -E estimate rule prob, -e/-f beta prior on pya, -g/-h gamma prior on pyb
     return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]}" % cat
 
 def pycfg_emitter(target, source, env):
@@ -480,6 +520,9 @@ def pycfg_emitter(target, source, env):
 def TOOLS_ADD(env):
     env["PYCFG_PATH"] = "/usr/local/py-cfg"
     env.Append(BUILDERS = {
+        "MorphologyData" : Builder(action=morphology_data),
+        "ComposeGrammars" : Builder(action=compose_grammars),
+        "CharacterProductions" : Builder(action=character_productions),
         "ExtractAffixes" : Builder(action=extract_affixes),
         "CreateMorphologyModel" : make_command_builder("${CABAL}/bin/create_model ${MODEL} -i ${SOURCES[0]} -m ${TARGETS[0]} -d ${TARGETS[1]} ${HAS_PREFIXES and '--hasprefixes' or ''} ${HAS_SUFFIXES and '--hassuffixes' or ''} -k ${KEEP} --prefixfile ${SOURCES[1]} --suffixfile ${SOURCES[2]}", 
                                              ["Model", "Data"], 
