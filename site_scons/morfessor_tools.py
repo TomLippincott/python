@@ -12,6 +12,24 @@ import math
 import xml.etree.ElementTree as et
 from morfessor import BaselineModel, MorfessorIO, get_default_argparser
 
+def apply_morfessor(target, source, env):
+    parser = get_default_argparser()
+    args = parser.parse_args([])
+    io = MorfessorIO(encoding=args.encoding,
+                     compound_separator=args.cseparator,
+                     atom_separator=args.separator)
+    model = io.read_binary_model_file(source[0].rstr())
+    terms = {}
+    for fname in source[1:]:
+        with meta_open(fname.rstr()) as ifd:
+            for t in et.parse(ifd).getiterator("kw"):
+                text = list(t.getiterator("kwtext"))[0].text.lower()
+                terms[t.get("kwid")] = (text, model.viterbi_segment(text))
+    with meta_open(target[0].rstr(), "w") as ofd:
+        for i, (t, (s, p)) in terms.iteritems():
+            ofd.write("%s %s %s\n" % (i, t, s))
+    return None
+
 def train_morfessor(target, source, env):
     parser = get_default_argparser()
     args = parser.parse_args([])
@@ -38,6 +56,7 @@ def train_morfessor(target, source, env):
     d = DataSet.from_analyses([x for x in model.get_segmentations()])
     with meta_open(target[0].rstr(), "w") as ofd:
         d.write(ofd)
+    io.write_binary_model_file(target[1].rstr(), model)
     return None
 
 def morfessor_data_builder(target, source, env):    
@@ -92,12 +111,13 @@ def evaluate_morfessor(target, source, env):
 def TOOLS_ADD(env):
     env.Append(BUILDERS = {
         "TrainMorfessor" : Builder(action=train_morfessor),
-        'MorfessorData' : Builder(action=morfessor_data_builder),
-        'MorfessorRun' : Builder(generator=morfessor_run_generator),
-        'MorfessorDisplayCounts' : Builder(generator=morfessor_display_counts_generator),
-        'MorfessorEstimateProbs' : Builder(generator=morfessor_estimate_probs_generator),
-        'MorfessorViterbiTag' : Builder(generator=morfessor_viterbitag_generator),
-        'MorfessorAlignSegmentations' : Builder(generator=morfessor_align_segmentations),
-        'MorfessorEvaluateTags' : Builder(generator=morfessor_evaluate_tags),
-        'MorfessorLatinGold' : Builder(action=morfessor_latin_gold),
+        "ApplyMorfessor" : Builder(action=apply_morfessor),
+        # 'MorfessorData' : Builder(action=morfessor_data_builder),
+        # 'MorfessorRun' : Builder(generator=morfessor_run_generator),
+        # 'MorfessorDisplayCounts' : Builder(generator=morfessor_display_counts_generator),
+        # 'MorfessorEstimateProbs' : Builder(generator=morfessor_estimate_probs_generator),
+        # 'MorfessorViterbiTag' : Builder(generator=morfessor_viterbitag_generator),
+        # 'MorfessorAlignSegmentations' : Builder(generator=morfessor_align_segmentations),
+        # 'MorfessorEvaluateTags' : Builder(generator=morfessor_evaluate_tags),
+        # 'MorfessorLatinGold' : Builder(action=morfessor_latin_gold),
     })

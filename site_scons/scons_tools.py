@@ -1,7 +1,9 @@
-from SCons.Builder import Builder
+from SCons.Builder import Builder, BuilderBase
 from SCons.Action import Action
 from SCons.Subst import scons_subst
 import os.path
+from subprocess import Popen, PIPE, STDOUT
+import shlex
 
 def strip_file(f):
     return os.path.splitext(os.path.basename(f))[0]
@@ -33,4 +35,20 @@ def make_command_builder(command, targets, arg_names, directory):
         new_target = [os.path.join(directory, "%s_%s.txt" % (t, spec)) for t in targets]
         return new_target, source
     return Builder(generator=generator, emitter=emitter)
+
+class ThreadedBuilder(BuilderBase):
+    def __init__(self, action):
+        print action
+
+    def __call__(self, env, target, source, chdir=None, **kw):
+        print env.subst(target)
+        pass
+
+
+def threaded_run(target, source, env):
+    cmd = env.subst("scons -Q IS_THREADED=False HAS_TORQUE=False ${TARGET}", target=target, source=source)
+    pid = Popen(shlex.split(cmd))
+    pid.communicate()
+    return None
+
 

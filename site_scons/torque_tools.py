@@ -23,6 +23,7 @@ from os.path import join as pjoin
 import pickle
 from common_tools import temp_file, meta_open
 import torque
+import os
 
 def TorqueCommandBuilder(**kw):
     def torque_builder(target, source, env):
@@ -39,6 +40,24 @@ def TorqueCommandBuilder(**kw):
             time.sleep(interval)
         return None
     return Builder(action=torque_builder, emitter=kw["emitter"])
+
+def torque_run(target, source, env):
+    args = {}
+    cmd = env.subst("scons -Q IS_THREADED=False HAS_TORQUE=False ${TARGET}", target=target, source=source)
+    stdout = env.subst("${TARGET}.out", target=target, source=source)
+    stderr = env.subst("${TARGET}.err", target=target, source=source)
+    job = torque.Job(args.get("name", "scons"),
+                     commands=["source /vega/ccls/users/tml2115/bashrc.txt", cmd], #env.subst(x) for x in args["commands"]],
+                     path=args.get("path", os.getcwd()),
+                     stdout_path=stdout,
+                     stderr_path=stderr,
+                     array=args.get("array", 0),
+                     other=args.get("other", []))
+    job.submit(commit=False)
+    while job.job_id in [x[0] for x in torque.get_jobs(True)]:
+        logging.info("sleeping...")
+        time.sleep(interval)
+    return None
 
 def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, data=None):
     """

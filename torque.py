@@ -25,9 +25,11 @@ class Job():
     def __str__(self):
         lines = ["#PBS -N %s" % self.name] + self.other + ["#PBS -l %s=%s" % (k, v) for k, v in self.resources.iteritems()]
         if self.stdout_path:
-            lines.append("#PBS -o %s" % os.path.join(self.stdout_path, "%s-${PBS_JOBID}.out" % (self.name)))
+            lines.append("#PBS -o %s" % self.stdout_path)
+        #    lines.append("#PBS -o %s" % os.path.join(self.stdout_path, "%s-${PBS_JOBID}.out" % (self.name)))
         if self.stderr_path:
-            lines.append("#PBS -e %s" % os.path.join(self.stderr_path, "%s-${PBS_JOBID}.err" % (self.name)))
+            lines.append("#PBS -e %s" % self.stderr_path)
+        #    lines.append("#PBS -e %s" % os.path.join(self.stderr_path, "%s-${PBS_JOBID}.err" % (self.name)))
         if self.dependencies:
             arrays = [x.job_id for x in self.dependencies if x.array > 0]
             nonarrays = [x.job_id for x in self.dependencies if x.array == 0]

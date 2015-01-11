@@ -27,10 +27,7 @@ from scipy.misc import comb
 #from rpy2.robjects.numpy2ri import numpy2ri
 from unicodedata import name
 import logging
-try:
-    import lxml.etree as et
-except:
-    import xml.etree.ElementTree as et
+import lxml.etree as et
 
 def regular_word(w):
     return not any(w.endswith(x) for x in ["-", "*", ">", "~"]) and "(" not in w and "_" not in w
@@ -206,8 +203,8 @@ def temp_dir(prefix="tmp", remove=True):
         shutil.rmtree(temp_dir)
 
 @contextlib.contextmanager
-def temp_file(prefix="tmp", remove=True):
-    (fid, temp_file) = tempfile.mkstemp(prefix=prefix)
+def temp_file(suffix="", prefix="tmp", remove=True):
+    (fid, temp_file) = tempfile.mkstemp(prefix=prefix, suffix=suffix)
     yield temp_file
     if remove:
         os.remove(temp_file)
@@ -1023,5 +1020,16 @@ def parse_rasp_sentence(text):
 
 
 if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--input", dest="input")
+    parser.add_argument("-w", "--word", dest="word")
+    options = parser.parse_args()
+
+    with meta_open(options.input) as ifd:
+        d = DataSet.from_stream(ifd)[0]
+        w2i = {v : k for k, v in d.indexToWord.iteritems()}
+        a2i = {v : k for k, v in d.indexToAnalysis.iteritems()}
+        wi2ai = {v : k for k, v in d.analysisIndexToWordIndex.iteritems()}
+        print d.indexToAnalysis[wi2ai[w2i[options.word]]]
