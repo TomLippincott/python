@@ -47,16 +47,16 @@ def torque_run(target, source, env):
     stdout = env.subst("${TARGET}.out", target=target, source=source)
     stderr = env.subst("${TARGET}.err", target=target, source=source)
     job = torque.Job(args.get("name", "scons"),
-                     commands=["source /vega/ccls/users/tml2115/bashrc.txt", cmd], #env.subst(x) for x in args["commands"]],
+                     commands=["source /vega/ccls/users/tml2115/projects/bashrc.txt", cmd], #env.subst(x) for x in args["commands"]],
                      path=args.get("path", os.getcwd()),
                      stdout_path=stdout,
                      stderr_path=stderr,
                      array=args.get("array", 0),
-                     other=args.get("other", []))
-    job.submit(commit=False)
+                     other=args.get("other", ["#PBS -W group_list=yeticcls"]))
+    job.submit(commit=True)
     while job.job_id in [x[0] for x in torque.get_jobs(True)]:
         logging.info("sleeping...")
-        time.sleep(interval)
+        time.sleep(int(env["TORQUE_INTERVAL"]))
     return None
 
 def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, data=None):
