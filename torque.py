@@ -14,9 +14,9 @@ class Job():
         self.commands = commands
         self.path = os.path.abspath(path)
         self.array = array
-        self.resources["cput"] = resources.get("cput", "30:30:00")
-        self.resources["walltime"] = resources.get("walltime", "30:30:00")
-        self.resources["mem"] = "4000mb"
+        self.resources["cput"] = resources.get("cput", "11:30:00")
+        self.resources["walltime"] = resources.get("walltime", "11:30:00")
+        self.resources["mem"] = "15000mb"
         self.commands.append("exit 0")
         self.stdout_path = os.path.abspath(stdout_path)
         self.stderr_path = os.path.abspath(stderr_path)
