@@ -42,6 +42,7 @@ def TorqueCommandBuilder(**kw):
     return Builder(action=torque_builder, emitter=kw["emitter"])
 
 def torque_run(target, source, env):
+    args = {}
     running = []
     for t in target:
         cmd = env.subst("scons -Q IS_THREADED=False HAS_TORQUE=False ${TARGET}", target=t, source=source)
