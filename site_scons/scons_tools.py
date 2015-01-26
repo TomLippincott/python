@@ -46,7 +46,7 @@ class ThreadedBuilder(BuilderBase):
 
 
 def threaded_run(target, source, env):
-    cmd = env.subst("scons -Q IS_THREADED=False HAS_TORQUE=False ${TARGET}", target=target, source=source)
+    cmd = env.subst("scons -Q THREADED_SUBMIT_NODE=False THREADED_WORKER_NODE=True TORQUE_SUBMIT_NODE=False TORQUE_WORKER_NODE=False ${TARGET}", target=target, source=source)
     pid = Popen(shlex.split(cmd))
     pid.communicate()
     return None

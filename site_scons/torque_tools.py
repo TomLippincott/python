@@ -25,6 +25,7 @@ from common_tools import temp_file, meta_open
 import torque
 import os
 
+
 def TorqueCommandBuilder(**kw):
     def torque_builder(target, source, env):
         cmd = env.subst(kw["action"].genstring(target, source, env), target=target, source=source)
@@ -40,6 +41,7 @@ def TorqueCommandBuilder(**kw):
             time.sleep(interval)
         return None
     return Builder(action=torque_builder, emitter=kw["emitter"])
+
 
 def torque_run(target, source, env):
     args = {}
@@ -64,6 +66,7 @@ def torque_run(target, source, env):
         running = [x for x in running if x in active]
     return None
 
+
 def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, data=None):
     """
     Simple convenience wrapper for running commands (not an actual Builder).
@@ -77,6 +80,7 @@ def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stde
     else:
         out, err = process.communicate()
     return out, err, process.returncode == 0
+
 
 def submit_job(target, source, env):
     if env["HAS_TORQUE"]:
@@ -105,25 +109,5 @@ def submit_job(target, source, env):
 
 
 def TOOLS_ADD(env):
-    #env.SConsignFile(".temp")
-    #x = SCons.SConsign.DirFile(".temp")
-    #db = SCons.dblite.open(".temp")
-    #dest_db = SCons.dblite.open(".temp2", "w")
-    #print type(db), dir(db), db.keys()
-    #for loc in db.keys():
-        #print loc
-        #e = {k : v.convert_from_sconsign(loc, k) for k, v in pickle.loads(db[loc]).iteritems()}
-        # ninfo FileNodeInfo
-        # binfo FileBuildInfo
-        # current_version_id Int
-        # convert_from_sconsign, to
-        #e = {os.path.join(loc, k) : (v.binfo, v.ninfo, v.current_version_id) for k, v in pickle.loads(db[loc]).iteritems()}
-    #    e = {os.path.join(loc, k) : (type(v.binfo), v.ninfo.format(), v.current_version_id) for k, v in pickle.loads(db[loc]).iteritems()}
-    #    print e
-        #e = {os.path.join(loc, k) : v for k, v in db[loc]}
-        #print "\n".join(["%s %s" % x for x in e.iteritems()])
-        #print loc, type(db[loc])
-    #env.Append(BUILDERS = {"SubmitJob" : Builder(action=submit_job),
-    #                       })
     pass
-
+    #env["TORQUE_SUBMIT_NODE"] = False
