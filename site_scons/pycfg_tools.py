@@ -9,9 +9,7 @@ import os
 from os.path import join as pjoin
 from common_tools import meta_open, DataSet, v_measure, regular_word
 from itertools import product
-import torque
 from subprocess import Popen, PIPE
-from torque_tools import TorqueCommandBuilder
 from scons_tools import make_generic_emitter, make_command_builder
 
 def format_rules(rules):
@@ -470,15 +468,24 @@ def extract_affixes(target, source, env):
     return None
 
 def character_productions(target, source, env):
-    with meta_open(source[0].rstr()) as ifd:
-        data = DataSet.from_stream(ifd)[0]
-        words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)]
-        words = [w.lower() for w in words]
-        words = set(words)
-        characters = set(sum([[c for c in w] for w in words], []))
+    try:
+        with meta_open(source[0].rstr()) as ifd:
+            data = DataSet.from_stream(ifd)[0]
+            words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)]
+            words = [w.lower() for w in words]
+            words = set(words)
+            characters = set(sum([[c for c in w] for w in words], []))
+    except:
+        with meta_open(source[0].rstr()) as ifd:
+            characters = set()
+            for l in ifd:
+                for c in l:
+                    if not re.match(r"\s", c):
+                        characters.add(c)
     with meta_open(target[0].rstr(), "w") as ofd:
         for c in characters:
-            ofd.write("0 1 Char --> %s\n" % (c.encode("utf-8")))
+            #ofd.write("0 1 Char --> %s\n" % (c.encode("utf-8")))
+            ofd.write("0 1 Char --> %s\n" % (c))
     return None
 
 def compose_grammars(target, source, env):
@@ -498,11 +505,16 @@ def compose_grammars(target, source, env):
     return None
 
 def morphology_data(target, source, env):
-    with meta_open(source[0].rstr()) as ifd:
-        data = DataSet.from_stream(ifd)[0]
-        words = set([word.lower() for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)])
+    try:
+        with meta_open(source[0].rstr()) as ifd:
+            data = DataSet.from_stream(ifd)[0]
+            words = set([word.lower() for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)])
+    except:
+        with meta_open(source[0].rstr()) as ifd:
+            words = set([l.split()[1] for l in ifd])
     with meta_open(target[0].rstr(), "w") as ofd:
-        ofd.write("\n".join([" ".join(["^^^"] + [c.encode("utf-8") for c in w] + ["$$$"]) for w in words]))
+        #ofd.write("\n".join([" ".join(["^^^"] + [c.encode("utf-8") for c in w] + ["$$$"]) for w in words]))
+        ofd.write("\n".join([" ".join(["^^^"] + [c for c in w] + ["$$$"]) for w in words]))
     return None
 
 def pycfg_generator(target, source, env, for_signature):
@@ -514,7 +526,8 @@ def pycfg_generator(target, source, env, for_signature):
     return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]}" % cat
 
 def pycfg_emitter(target, source, env):
-    new_target = ["work/pycfg_output/%s_%s.txt" % (os.path.basename(target[0].rstr()), x) for x in ["parse", "grammar", "trace"]]
+    if len(target) == 1:
+        new_target = [target[0]] + ["work/pycfg_output/%s_%s.txt" % (os.path.basename(target[0].rstr()), x) for x in ["grammar", "trace"]]
     return new_target, source
 
 def TOOLS_ADD(env):
@@ -550,20 +563,7 @@ def TOOLS_ADD(env):
         "EvaluateManyMorphology" : Builder(action=evaluate_many_morphology),
     })
     pycfg_action = CommandGeneratorAction(pycfg_generator, {})
-    #print x
-
-    if env["HAS_TORQUE"] == True:
-        pycfg_builder = TorqueCommandBuilder(action=pycfg_action, emitter=pycfg_emitter)
-        #runner = make_torque_command_builder("cat ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]}",
-        #                              ["Parses", "Grammar", "Trace"],
-        #                              ["LANGUAGE", "MODEL", "HAS_PREFIXES", "HAS_SUFFIXES", "KEEP"], 
-        #                              "work/pycfg_output")
-    else:
-        pycfg_builder = Builder(action=pycfg_action, emitter=pycfg_emitter)
-        #runner = make_command_builder("cat ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]}",
-        #                              ["Parses", "Grammar", "Trace"],
-        #                              ["LANGUAGE", "MODEL", "HAS_PREFIXES", "HAS_SUFFIXES", "KEEP"], 
-        #                              "work/pycfg_output")
+    pycfg_builder = Builder(action=pycfg_action, emitter=pycfg_emitter)
     env.Append(BUILDERS = {"RunPYCFG" : pycfg_builder})
     env.AddMethod(evaluate_tagging, "EvaluateTagging")
     env.AddMethod(evaluate_tagging, "EvaluateGoldSegmentationsJoint")

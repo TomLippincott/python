@@ -41,13 +41,17 @@ def train_morfessor(target, source, env):
                      compound_separator=args.cseparator,
                      atom_separator=args.separator)
     words = {}
-    with meta_open(source[0].rstr()) as ifd:
-        dataset = DataSet.from_stream(ifd)[-1]
-        for sentence in dataset.sentences:
-            for word_id, tag_id, analysis_ids in sentence:
-                word = dataset.indexToWord[word_id].lower()
-                if regular_word(word):
-                    words[word] = words.get(word, 0) + 1
+    try:
+        with meta_open(source[0].rstr()) as ifd:
+            dataset = DataSet.from_stream(ifd)[-1]
+            for sentence in dataset.sentences:
+                for word_id, tag_id, analysis_ids in sentence:
+                    word = dataset.indexToWord[word_id].lower()
+                    if regular_word(word):
+                        words[word] = words.get(word, 0) + 1
+    except:
+        with meta_open(source[0].rstr()) as ifd:
+            words = {w : int(n) for n, w in [x.strip().split() for x in ifd]}
     model.load_data([(1, w, (w)) for w, c in words.iteritems()], args.freqthreshold, dampfunc, args.splitprob)
     algparams = ()
     develannots = None
