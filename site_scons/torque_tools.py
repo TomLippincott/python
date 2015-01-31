@@ -46,12 +46,18 @@ def TorqueCommandBuilder(**kw):
 def torque_run(target, source, env):
     args = {}
     running = []
+    resources = {
+        "mem" : env["TORQUE_MEMORY"],
+        "cput" : env["TORQUE_TIME"],
+        "walltime" : env["TORQUE_TIME"],
+        }
     for t in target:
-        cmd = env.subst("scons -Q IS_THREADED=False HAS_TORQUE=False ${TARGET}", target=t, source=source)
+        cmd = env.subst("scons -Q TORQUE_WORKER_NODE=True TORQUE_SUBMIT_NODE=False THREADED_SUBMIT_NODE=False THREADED_WORKER_NODE=False ${TARGET}", target=t, source=source)
         stdout = env.subst("${TARGET}.out", target=t, source=source)
         stderr = env.subst("${TARGET}.err", target=t, source=source)
         job = torque.Job(args.get("name", "scons"),
                          commands=["source /vega/ccls/users/tml2115/projects/bashrc.txt", cmd],
+                         resources=resources,
                          path=args.get("path", os.getcwd()),
                          stdout_path=stdout,
                          stderr_path=stderr,

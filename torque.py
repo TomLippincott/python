@@ -16,7 +16,7 @@ class Job():
         self.array = array
         self.resources["cput"] = resources.get("cput", "11:30:00")
         self.resources["walltime"] = resources.get("walltime", "11:30:00")
-        self.resources["mem"] = "3500mb"
+        self.resources["mem"] = resources.get("mem", "3500mb")
         self.commands.append("exit 0")
         self.stdout_path = os.path.abspath(stdout_path)
         self.stderr_path = os.path.abspath(stderr_path)
