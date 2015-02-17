@@ -4,6 +4,9 @@ from SCons.Subst import scons_subst
 import os.path
 from subprocess import Popen, PIPE, STDOUT
 import shlex
+import tarfile
+from common_tools import meta_open
+import re
 
 def strip_file(f):
     return os.path.splitext(os.path.basename(f))[0]
@@ -51,4 +54,15 @@ def threaded_run(target, source, env):
     pid.communicate()
     return None
 
+def tar_member(target, source, env):
+    pattern = env.subst(source[1].read())
+    with meta_open(target[0].rstr(), "w") as ofd:
+        with tarfile.open(source[0].rstr()) as tf:
+            for name in [n for n in tf.getnames() if re.match(pattern, n)]:
+                ofd.write(tf.extractfile(name).read())
+    return None
 
+def TOOLS_ADD(env):
+    BUILDERS = {"TarMember" : Builder(action=tar_member),
+                }
+    env.Append(BUILDERS=BUILDERS)

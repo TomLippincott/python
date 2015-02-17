@@ -24,10 +24,24 @@ def apply_morfessor(target, source, env):
         with meta_open(fname.rstr()) as ifd:
             for t in et.parse(ifd).getiterator("kw"):
                 text = list(t.getiterator("kwtext"))[0].text.lower()
-                terms[t.get("kwid")] = (text, model.viterbi_segment(text))
-    with meta_open(target[0].rstr(), "w") as ofd:
-        for i, (t, (s, p)) in terms.iteritems():
-            ofd.write("%s %s %s\n" % (i, t, s))
+                words = text.strip().split()
+                kwid = t.get("kwid")
+                terms[kwid] = (text, [])
+                for w in words:
+                    toks, score = model.viterbi_segment(w.encode("utf-8"))
+                    if len(toks) >= 2:
+                        toks = ["%s+" % toks[0]] + ["+%s+" % t for t in toks[1:-1]] + ["+%s" % toks[-1]]                        
+                    terms[kwid] = (text, terms[kwid][1] + toks)
+    lines = []
+    for i, (t, s) in terms.iteritems():
+        lines.append("%s %s" % (i, " ".join(s)))
+    try:
+        with meta_open(target[0].rstr(), "w") as ofd:
+            ofd.write(("\n".join(lines)).encode("utf-8"))
+    except:
+        with meta_open(target[0].rstr(), "w") as ofd:
+            ofd.write("\n".join(lines))
+
     return None
 
 def train_morfessor(target, source, env):
@@ -51,15 +65,23 @@ def train_morfessor(target, source, env):
                         words[word] = words.get(word, 0) + 1
     except:
         with meta_open(source[0].rstr()) as ifd:
-            words = {w : int(n) for n, w in [x.strip().split() for x in ifd]}
+            for line in ifd:
+                for w in line.lower().split():
+                    if regular_word(w):
+                        words[w] = words.get(w, 0) + 1
+            #words = {w : int(n) for n, w in [x.strip().split() for x in ifd]}
     model.load_data([(1, w, (w)) for w, c in words.iteritems()], args.freqthreshold, dampfunc, args.splitprob)
     algparams = ()
     develannots = None
     e, c = model.train_batch(args.algorithm, algparams, develannots,
                              args.finish_threshold, args.maxepochs)
-    d = DataSet.from_analyses([x for x in model.get_segmentations()])
+    
+    #d = DataSet.from_analyses([x for x in model.get_segmentations()])
     with meta_open(target[0].rstr(), "w") as ofd:
-        d.write(ofd)
+        for n, morphs in model.get_segmentations():
+            if len(morphs) >= 2:
+                morphs = ["%s+" % morphs[0]] + ["+%s+" % t for t in morphs[1:-1]] + ["+%s" % morphs[-1]]
+            ofd.write(" ".join(morphs) + "\n")
     io.write_binary_model_file(target[1].rstr(), model)
     return None
 

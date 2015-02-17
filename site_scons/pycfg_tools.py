@@ -289,33 +289,33 @@ def gold_tags_joint_cfg(target, source, env):
 def list_to_tuples(xs, n=2):
     return [[xs[i * n + j] for j in range(n)] for i in range(len(xs) / n)]
 
-def run_pycfg_torque(target, source, env):
-    """
-    Pairs of inputs and outputs
-    """
-    jobs = []
-    interval = 30
-    for (cfg, data), (out, grammar, log) in zip(list_to_tuples(source), list_to_tuples(target, 3)):
-        job = torque.Job("py-cfg",
-                         commands=[env.subst(cmd, target=[out, grammar, log], source=[cfg, data])],
-                         #path=args["path"],
-                         stdout_path=os.path.abspath("torque"),
-                         stderr_path=os.path.abspath("torque"),
-                         array=0,
-                         other=["#PBS -W group_list=yeticcls"],
-                         resources={
-                             "cput" : "40:00:00",
-                             "walltime" : "40:00:00",
-                         },
-                         )
-        job.submit(commit=True)
-        jobs.append(job)
-    running = torque.get_jobs(True)
-    while any([job.job_id in [x[0] for x in running] for job in jobs]):
-        logging.info("sleeping...")
-        time.sleep(interval)
-        running = torque.get_jobs(True)
-    return None
+# def run_pycfg_torque(target, source, env):
+#     """
+#     Pairs of inputs and outputs
+#     """
+#     jobs = []
+#     interval = 30
+#     for (cfg, data), (out, grammar, log) in zip(list_to_tuples(source), list_to_tuples(target, 3)):
+#         job = torque.Job("py-cfg",
+#                          commands=[env.subst(cmd, target=[out, grammar, log], source=[cfg, data])],
+#                          #path=args["path"],
+#                          stdout_path=os.path.abspath("torque"),
+#                          stderr_path=os.path.abspath("torque"),
+#                          array=0,
+#                          other=["#PBS -W group_list=yeticcls"],
+#                          resources={
+#                              "cput" : "40:00:00",
+#                              "walltime" : "40:00:00",
+#                          },
+#                          )
+#         job.submit(commit=True)
+#         jobs.append(job)
+#     running = torque.get_jobs(True)
+#     while any([job.job_id in [x[0] for x in running] for job in jobs]):
+#         logging.info("sleeping...")
+#         time.sleep(interval)
+#         running = torque.get_jobs(True)
+#     return None
 
 def collate_tagging_output(target, source, env):
     sentences = []
@@ -511,7 +511,7 @@ def morphology_data(target, source, env):
             words = set([word.lower() for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)])
     except:
         with meta_open(source[0].rstr()) as ifd:
-            words = set([l.split()[1] for l in ifd])
+            words = set(sum([l.lower().split() for l in ifd], []))
     with meta_open(target[0].rstr(), "w") as ofd:
         #ofd.write("\n".join([" ".join(["^^^"] + [c.encode("utf-8") for c in w] + ["$$$"]) for w in words]))
         ofd.write("\n".join([" ".join(["^^^"] + [c for c in w] + ["$$$"]) for w in words]))
@@ -528,10 +528,12 @@ def pycfg_generator(target, source, env, for_signature):
 def pycfg_emitter(target, source, env):
     if len(target) == 1:
         new_target = [target[0]] + ["work/pycfg_output/%s_%s.txt" % (os.path.basename(target[0].rstr()), x) for x in ["grammar", "trace"]]
+    else:
+        new_target = target
     return new_target, source
 
 def TOOLS_ADD(env):
-    env["PYCFG_PATH"] = "/usr/local/py-cfg"
+    #env["PYCFG_PATH"] = "/usr/local/py-cfg"
     env.Append(BUILDERS = {
         "MorphologyData" : Builder(action=morphology_data),
         "ComposeGrammars" : Builder(action=compose_grammars),

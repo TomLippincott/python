@@ -1,6 +1,8 @@
 from SCons.Builder import Builder
 from SCons.Action import Action
 from SCons.Subst import scons_subst
+from SCons.Taskmaster import Task
+from SCons.Executor import Executor
 import SCons.dblite
 import SCons.Warnings
 import SCons.SConsign
@@ -24,6 +26,9 @@ import pickle
 from common_tools import temp_file, meta_open
 import torque
 import os
+
+class TorqueTask(Task):
+    pass
 
 
 def TorqueCommandBuilder(**kw):
