@@ -27,8 +27,8 @@ from common_tools import temp_file, meta_open
 import torque
 import os
 
-def torque_batch_key(action, env, target, source):
-    return 0
+def torque_batch_key(self, env, target, source):
+    return True
 
 def make_torque_builder(builder, targets_per_job=1, sources_per_job=1):
     def torque_print(target, source, env):
@@ -73,7 +73,7 @@ def make_torque_builder(builder, targets_per_job=1, sources_per_job=1):
                     active = [x[0] for x in torque.get_jobs(True)]
                     running = [x for x in running if x in active]
         return None
-    return Builder(action=Action(run_builder, torque_print, batch_key=True))
+    return Builder(action=Action(run_builder, torque_print, batch_key=torque_batch_key))
 
 def TOOLS_ADD(env):
     pass

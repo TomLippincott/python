@@ -11,6 +11,9 @@ from common_tools import meta_open, temp_file
 import re
 import logging
 
+def threaded_batch_key(self, env, target, source):
+    return True
+
 def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, data=None):
     """
     Simple convenience wrapper for running commands (not an actual Builder).
@@ -86,8 +89,8 @@ def make_threaded_builder(builder, targets_per_job=1, sources_per_job=1):
     def run_builder(target, source, env):
         target_sets = [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)]
         source_sets = [source[i * sources_per_job : (i + 1) * sources_per_job] for i in range(len(source) / sources_per_job)]
-        cmd = "scons -Q THREADED_SUBMIT_NODE=False THREADED_WORKER_NODE=True TORQUE_SUBMIT_NODE=False TORQUE_WORKER_NODE=False ${TARGET}"
         with meta_open(".sconsign.dblite", "r", None) as ifd, temp_file() as ofd_name:
+            cmd = "scons -Q THREADED_SUBMIT_NODE=False THREADED_WORKER_NODE=True TORQUE_SUBMIT_NODE=False TORQUE_WORKER_NODE=False SCONSIGN_FILE=%s ${TARGET}" % (ofd_name)
             with meta_open(ofd_name, "w", None) as ofd:
                 ofd.write(ifd.read())
                 p = Pool(3)
@@ -96,7 +99,7 @@ def make_threaded_builder(builder, targets_per_job=1, sources_per_job=1):
                 p.close()
                 p.join()
         return None
-    return Builder(action=Action(run_builder, threaded_print, batch_key=True))
+    return Builder(action=Action(run_builder, threaded_print, batch_key=threaded_batch_key))
 
 def tar_member(target, source, env):
     pattern = env.subst(source[1].read())

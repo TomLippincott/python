@@ -139,6 +139,9 @@ def morfessor_latin_gold(target, source, env):
 def evaluate_morfessor(target, source, env):
     return None
 
+def asr_test(target, source, env):
+    return None
+
 def TOOLS_ADD(env):
     env.Append(BUILDERS = {
         "TrainMorfessor" : Builder(action=train_morfessor),
