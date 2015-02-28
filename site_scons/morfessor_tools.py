@@ -21,27 +21,22 @@ def apply_morfessor(target, source, env):
     model = io.read_binary_model_file(source[0].rstr())
     terms = {}
     for fname in source[1:]:
-        with meta_open(fname.rstr()) as ifd:
+        with meta_open(fname.rstr(), enc=None) as ifd:
             for t in et.parse(ifd).getiterator("kw"):
                 text = list(t.getiterator("kwtext"))[0].text.lower()
                 words = text.strip().split()
                 kwid = t.get("kwid")
                 terms[kwid] = (text, [])
                 for w in words:
-                    toks, score = model.viterbi_segment(w.encode("utf-8"))
+                    toks, score = model.viterbi_segment(w)
                     if len(toks) >= 2:
                         toks = ["%s+" % toks[0]] + ["+%s+" % t for t in toks[1:-1]] + ["+%s" % toks[-1]]                        
                     terms[kwid] = (text, terms[kwid][1] + toks)
     lines = []
     for i, (t, s) in terms.iteritems():
-        lines.append("%s %s" % (i, " ".join(s)))
-    try:
-        with meta_open(target[0].rstr(), "w") as ofd:
-            ofd.write(("\n".join(lines)).encode("utf-8"))
-    except:
-        with meta_open(target[0].rstr(), "w") as ofd:
-            ofd.write("\n".join(lines))
-
+        lines.append(" ".join(s))
+    with meta_open(target[0].rstr(), "w") as ofd:
+        ofd.write(("\n".join(lines)))
     return None
 
 def train_morfessor(target, source, env):
@@ -83,6 +78,16 @@ def train_morfessor(target, source, env):
                 morphs = ["%s+" % morphs[0]] + ["+%s+" % t for t in morphs[1:-1]] + ["+%s" % morphs[-1]]
             ofd.write(" ".join(morphs) + "\n")
     io.write_binary_model_file(target[1].rstr(), model)
+    return None
+
+def normalize_morfessor_output(target, source, env):
+    segs = []
+    with meta_open(source[0].rstr()) as ifd:
+        for line in ifd:
+            toks = line.strip().split()
+            segs.append(("".join([t.strip("+") for t in toks]), toks))
+    with meta_open(target[0].rstr(), "w") as ofd:
+        ofd.write("\n".join(["%s\t%s" % (w, " ".join(ts)) for w, ts in segs]))        
     return None
 
 def morfessor_data_builder(target, source, env):    
@@ -138,6 +143,7 @@ def TOOLS_ADD(env):
     env.Append(BUILDERS = {
         "TrainMorfessor" : Builder(action=train_morfessor),
         "ApplyMorfessor" : Builder(action=apply_morfessor),
+        "NormalizeMorfessorOutput" : Builder(action=normalize_morfessor_output),
         # 'MorfessorData' : Builder(action=morfessor_data_builder),
         # 'MorfessorRun' : Builder(generator=morfessor_run_generator),
         # 'MorfessorDisplayCounts' : Builder(generator=morfessor_display_counts_generator),

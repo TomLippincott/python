@@ -6,6 +6,7 @@ import random
 import glob
 import cPickle
 import csv
+import codecs
 import tempfile
 import math
 import tempfile
@@ -21,7 +22,6 @@ import numpy
 from scipy.special import gamma, gammainc
 from scipy import sparse
 from scipy.misc import comb
-
 
 #from rpy2.robjects.conversion import ri2py
 #from rpy2.robjects.numpy2ri import numpy2ri
@@ -203,8 +203,8 @@ def temp_dir(prefix="tmp", remove=True):
         shutil.rmtree(temp_dir)
 
 @contextlib.contextmanager
-def temp_file(suffix="", prefix="tmp", remove=True):
-    (fid, temp_file) = tempfile.mkstemp(prefix=prefix, suffix=suffix)
+def temp_file(suffix="", prefix="tmp", remove=True, dir=None):
+    (fid, temp_file) = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=dir)
     yield temp_file
     if remove:
         os.remove(temp_file)
@@ -463,17 +463,25 @@ def meta_basename(fname, mdepth=1):
         return splitext(basename(fname))[0]
 
 
-def meta_open(fname, mode="r"):
+def meta_open(fname, mode="r", enc="utf-8"):
     if fname.endswith(".tgz"):
         return tarfile.open(fname, "%s:gz" % mode)
     elif fname.endswith(".tbz2"):
         return tarfile.open(fname, "%s:bz2" % mode)
     elif fname.endswith(".gz"):
-        return gzip.open(fname, mode)
+        g = gzip.open(fname, mode)
+        if enc:
+            reader = codecs.getreader(enc)
+            return reader(g)
+        else:
+            return g    
     elif fname.endswith(".bz2"):
         return bz2.BZ2File(fname, mode)
     else:
-        return open(fname, mode)
+        if enc:
+            return codecs.open(fname, mode, enc)
+        else:
+            return open(fname, mode)
 
 
 def generic_emitter_old(target, source, env, name="", ext="", remove=None, extra_targets=[], targets=[]):

@@ -6,6 +6,7 @@ from glob import glob
 import logging
 import os.path
 import os
+import codecs
 from os.path import join as pjoin
 from common_tools import meta_open, DataSet, v_measure, regular_word
 from itertools import product
@@ -348,6 +349,25 @@ def morphology_output_to_emma(target, source, env):
                 ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s:NULL" % m for m in a if m != ""]) for a in set(aa)])))
     return None
 
+def normalize_pycfg_output(target, source, env):
+    analyses = {}
+    with meta_open(source[0].rstr()) as ifd:
+        text = re.split(r"\n\s*?\n", ifd.read().strip())[-1]
+        for line in text.split("\n"):
+            toks = tuple(["".join([y.group(1).replace(" ", "") for y in re.finditer("\(\S+ ([^\)\(]+)\)", x)]) for x in re.split(r"\(Prefix|\(Stem|\(Suffix", line)[1:]])
+            toks = tuple([t for t in toks if len(t) > 0])
+            #toks = tuple(["".join([y.group(1) for y in re.finditer("\(\S+ ([^\)\(]+)\)", x)]) for x in re.split(r"\(Prefix|\(Stem|\(Suffix", line)[1:]])
+            word = "".join(toks)
+            if len(toks) > 1:
+                toks = tuple(["%s+" % (toks[0])] + ["+%s+" % (t) for t in toks[1:-1]] + ["+%s" % (toks[-1])])
+            if not re.match(r"^\s*$", word) and "_" not in word:
+                analyses[word] = analyses.get(word, []) + [toks]
+    with meta_open(target[0].rstr(), "w") as ofd:
+        for w, aa in sorted(analyses.iteritems()):
+            if re.match(r"^\w+$", w, re.UNICODE) and not re.match(r"^.*\d.*$", w):
+                ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s" % m for m in a if m != ""]) for a in set(aa)])))
+    return None
+
 def collate_joint_output(target, source, env):
     data = []
     with meta_open(source[0].rstr()) as ifd:
@@ -468,20 +488,21 @@ def extract_affixes(target, source, env):
     return None
 
 def character_productions(target, source, env):
-    try:
-        with meta_open(source[0].rstr()) as ifd:
-            data = DataSet.from_stream(ifd)[0]
-            words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)]
-            words = [w.lower() for w in words]
-            words = set(words)
-            characters = set(sum([[c for c in w] for w in words], []))
-    except:
-        with meta_open(source[0].rstr()) as ifd:
-            characters = set()
-            for l in ifd:
-                for c in l:
-                    if not re.match(r"\s", c):
-                        characters.add(c)
+    characters = set()
+    for f in source:
+        try:
+            with meta_open(f.rstr()) as ifd:
+                data = DataSet.from_stream(ifd)[0]
+                words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)]
+                words = [w.lower() for w in words]
+                words = set(words)
+                characters = set(sum([[c for c in w] for w in words], []))
+        except:
+            with meta_open(f.rstr()) as ifd:
+                for l in ifd:
+                    for c in l:
+                        if not re.match(r"\s", c):
+                            characters.add(c)
     with meta_open(target[0].rstr(), "w") as ofd:
         for c in characters:
             #ofd.write("0 1 Char --> %s\n" % (c.encode("utf-8")))
@@ -505,16 +526,21 @@ def compose_grammars(target, source, env):
     return None
 
 def morphology_data(target, source, env):
+    lc = source[1].read()
     try:
         with meta_open(source[0].rstr()) as ifd:
             data = DataSet.from_stream(ifd)[0]
             words = set([word.lower() for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)])
     except:
-        with meta_open(source[0].rstr()) as ifd:
-            words = set(sum([l.lower().split() for l in ifd], []))
-    with meta_open(target[0].rstr(), "w") as ofd:
-        #ofd.write("\n".join([" ".join(["^^^"] + [c.encode("utf-8") for c in w] + ["$$$"]) for w in words]))
-        ofd.write("\n".join([" ".join(["^^^"] + [c for c in w] + ["$$$"]) for w in words]))
+        with codecs.open(source[0].rstr(), "r", "utf-8") as ifd: #meta_open(source[0].rstr()) as ifd:
+            if lc:
+                words = set(sum([l.lower().split() for l in ifd], []))
+            else:                
+                words = set(sum([l.split() for l in ifd], []))
+                    
+    with codecs.open(target[0].rstr(), "w", "utf-8") as ofd: #meta_open(target[0].rstr(), "w") as ofd:
+        text = "\n".join([" ".join(["^^^"] + [c for c in w] + ["$$$"]) for w in words])
+        ofd.write(text)
     return None
 
 def pycfg_generator(target, source, env, for_signature):
@@ -523,8 +549,11 @@ def pycfg_generator(target, source, env, for_signature):
     else:
         cat = "cat"
     # -w: default rule prob or dirichlet prior, -d debug level, -E estimate rule prob, -e/-f beta prior on pya, -g/-h gamma prior on pyb
-    return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]}" % cat
-
+    if len(source) == 2:
+        return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]}" % cat
+    elif len(source) == 3:
+            return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]} -u ${SOURCES[2]} -U 'tee > ${TARGETS[3]}' -x ${NUM_ITERATIONS}" % cat
+    
 def pycfg_emitter(target, source, env):
     if len(target) == 1:
         new_target = [target[0]] + ["work/pycfg_output/%s_%s.txt" % (os.path.basename(target[0].rstr()), x) for x in ["grammar", "trace"]]
@@ -559,10 +588,11 @@ def TOOLS_ADD(env):
         "GoldTagsJointCFG" : Builder(action=gold_tags_joint_cfg),
         "GoldSegmentationsJointCFG" : Builder(action=gold_segmentations_joint_cfg),
         "CollateTaggingOutput" : Builder(action=collate_tagging_output),
-        "MorphologyOutputToEMMA" : Builder(action=morphology_output_to_emma, emitter=make_generic_emitter(["work/ag_emma_format/${SPEC}.txt"])),
+        "MorphologyOutputToEMMA" : Builder(action=morphology_output_to_emma), #emitter=make_generic_emitter(["work/ag_emma_format/${SPEC}.txt"])),
         "CollateJointOutput" : Builder(action=collate_joint_output),
         "TaggingOutputToDataset" : Builder(action=tagging_output_to_dataset),
         "EvaluateManyMorphology" : Builder(action=evaluate_many_morphology),
+        "NormalizePYCFGOutput" : Builder(action=normalize_pycfg_output),
     })
     pycfg_action = CommandGeneratorAction(pycfg_generator, {})
     pycfg_builder = Builder(action=pycfg_action, emitter=pycfg_emitter)

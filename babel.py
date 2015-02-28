@@ -208,7 +208,7 @@ class Pronunciations(dict):
                 with meta_open(f) as ifd:
                     for k, v in source.iteritems():
                         self[k] = v
-        elif isinstance(source, (file, gzip.GzipFile)):            
+        else: #if isinstance(source, (file, gzip.GzipFile)):
             for w, n, p in [re.match(r"^(\S+?)(\(\d+\))? (.*)$", l).groups() for l in source]:
                 if "REJ" in p and not self.keep_rejects:
                     continue

@@ -22,8 +22,6 @@ import locale
 import bisect
 from babel import ProbabilityList, Arpabo, Pronunciations, Vocabulary, FrequencyList
 from common_tools import Probability, temp_file, meta_open
-from torque_tools import run_command
-import torque
 from os.path import join as pjoin
 import matplotlib
 matplotlib.use("Agg")
