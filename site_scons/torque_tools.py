@@ -50,8 +50,8 @@ def make_torque_builder(builder, targets_per_job=1, sources_per_job=1):
         }
         target_sets = [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)]
         source_sets = [source[i * sources_per_job : (i + 1) * sources_per_job] for i in range(len(source) / sources_per_job)]
-        cmd = "scons -Q THREADED_SUBMIT_NODE=False THREADED_WORKER_NODE=True TORQUE_SUBMIT_NODE=False TORQUE_WORKER_NODE=False ${TARGET}"
         with meta_open(".sconsign.dblite", "r", None) as ifd, temp_file(dir="work") as ofd_name:
+            cmd = "scons -Q THREADED_SUBMIT_NODE=False THREADED_WORKER_NODE=True TORQUE_SUBMIT_NODE=False TORQUE_WORKER_NODE=False SCONSIGN_FILE=%s ${TARGET}" % (ofd_name)
             with meta_open(ofd_name, "w", None) as ofd:
                 ofd.write(ifd.read())
                 for t, s in zip(target_sets, source_sets):                    
