@@ -30,9 +30,6 @@ from scons_tools import make_batch_builder
 import functools
 
 def torque_executor(env, commands):
-    pass
-
-def run_builder(env, commands):
     args = {}
     running = []
     resources = {
@@ -44,7 +41,7 @@ def run_builder(env, commands):
         stdout = env.subst("${TORQUE_LOG}/")
         stderr = env.subst("${TORQUE_LOG}/")
         job = torque.Job(args.get("name", "scons"),
-                         commands=["source /vega/ccls/users/tml2115/projects/bashrc.txt", env.subst(cmd, target=t, source=s)],
+                         commands=["source /vega/ccls/users/tml2115/projects/bashrc.txt", env.subst(cmd)],
                          resources=resources,
                          path=args.get("path", os.getcwd()),
                          stdout_path=stdout,
