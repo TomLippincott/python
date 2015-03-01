@@ -1,3 +1,4 @@
+from SCons.Node.Python import Value
 from SCons.Builder import Builder, BuilderBase
 from SCons.Action import Action, CommandGeneratorAction, FunctionAction
 from SCons.Subst import scons_subst
@@ -10,9 +11,11 @@ import tarfile
 from common_tools import meta_open, temp_file
 import re
 import logging
+import functools
+import tempfile
 
-def threaded_batch_key(self, env, target, source):
-    return True
+def batch_key(self, env, target, source):
+    return tuple([s for s in source if not isinstance(s, Value)])
 
 def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, data=None):
     """
@@ -76,7 +79,15 @@ def threaded_run(target, source, env):
 def call(x):
     subprocess.call(x.split())
 
-def make_threaded_builder(builder, targets_per_job=1, sources_per_job=1):
+def threaded_executor(env, commands):
+    p = Pool(3)
+    for cmd in commands:
+        p.apply_async(call, (cmd,))
+    p.close()
+    p.join()
+    return None
+    
+def make_batch_builder(executor, builder, targets_per_job=1, sources_per_job=1):
     def threaded_print(target, source, env):
         target_sets = [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)]
         source_sets = [source[i * sources_per_job : (i + 1) * sources_per_job] for i in range(len(source) / sources_per_job)]
@@ -87,19 +98,23 @@ def make_threaded_builder(builder, targets_per_job=1, sources_per_job=1):
                                   for t, s in zip(target_sets, source_sets)])
         return "threaded(\n\t" + inside + "\n)"
     def run_builder(target, source, env):
-        target_sets = [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)]
-        source_sets = [source[i * sources_per_job : (i + 1) * sources_per_job] for i in range(len(source) / sources_per_job)]
-        with meta_open(".sconsign.dblite", "r", None) as ifd, temp_file() as ofd_name:
-            cmd = "scons -Q THREADED_SUBMIT_NODE=False THREADED_WORKER_NODE=True TORQUE_SUBMIT_NODE=False TORQUE_WORKER_NODE=False SCONSIGN_FILE=%s ${TARGET}" % (ofd_name)
-            with meta_open(ofd_name, "w", None) as ofd:
-                ofd.write(ifd.read())
-                p = Pool(3)
-                for t, s in zip(target_sets, source_sets):                    
-                    p.apply_async(call, (env.subst(cmd, target=t, source=s),))
-                p.close()
-                p.join()
-        return None
-    return Builder(action=Action(run_builder, threaded_print, batch_key=threaded_batch_key))
+        targets = [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)]
+        sources = [source[i * sources_per_job : (i + 1) * sources_per_job] for i in range(len(source) / sources_per_job)]
+        cmd = "scons -Q WORKER_NODE=True SCONSIGN_FILE=%s ${TARGET}"
+        dbfiles = [tempfile.mkstemp(suffix=".dblite", dir="work/")[1] for i in range(len(targets))]
+        with meta_open(".sconsign.dblite", "r", None) as ifd:
+            dbdata = ifd.read()
+        for fname in dbfiles:
+            with meta_open(fname, "w", None) as ofd:
+                ofd.write(dbdata)
+        commands = [env.subst(cmd % (d), target=t, source=s) for t, s, d in zip(targets, sources, dbfiles)]
+        retval = executor(env, commands)
+        for fname in dbfiles:
+            os.remove(fname)
+        return retval
+    return Builder(action=Action(run_builder, threaded_print, batch_key=batch_key))
+
+make_threaded_builder = functools.partial(make_batch_builder, threaded_executor)
 
 def tar_member(target, source, env):
     pattern = env.subst(source[1].read())
