@@ -364,8 +364,8 @@ def normalize_pycfg_output(target, source, env):
                 analyses[word] = analyses.get(word, []) + [toks]
     with meta_open(target[0].rstr(), "w") as ofd:
         for w, aa in sorted(analyses.iteritems()):
-            if re.match(r"^\w+$", w, re.UNICODE) and not re.match(r"^.*\d.*$", w):
-                ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s" % m for m in a if m != ""]) for a in set(aa)])))
+            #if re.match(r"^\w+$", w, re.UNICODE) and not re.match(r"^.*\d.*$", w):
+            ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s" % m for m in a if m != ""]) for a in set(aa)])))
     return None
 
 def collate_joint_output(target, source, env):
@@ -493,8 +493,8 @@ def character_productions(target, source, env):
         try:
             with meta_open(f.rstr()) as ifd:
                 data = DataSet.from_stream(ifd)[0]
-                words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)]
-                words = [w.lower() for w in words]
+                words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], [])] # if regular_word(word)]
+                #words = [w.lower() for w in words]
                 words = set(words)
                 characters = set(sum([[c for c in w] for w in words], []))
         except:
@@ -502,7 +502,8 @@ def character_productions(target, source, env):
                 for l in ifd:
                     for c in l:
                         if not re.match(r"\s", c):
-                            characters.add(c)
+                            characters.add(c.lower())
+    #print "W" in characters
     with meta_open(target[0].rstr(), "w") as ofd:
         for c in characters:
             #ofd.write("0 1 Char --> %s\n" % (c.encode("utf-8")))
@@ -537,8 +538,8 @@ def morphology_data(target, source, env):
                 words = set(sum([l.lower().split() for l in ifd], []))
             else:                
                 words = set(sum([l.split() for l in ifd], []))
-                    
-    with codecs.open(target[0].rstr(), "w", "utf-8") as ofd: #meta_open(target[0].rstr(), "w") as ofd:
+    words = set(sum([w.strip("-").split("-") for w in words if "_" not in w], []))
+    with meta_open(target[0].rstr(), "w") as ofd: #meta_open(target[0].rstr(), "w") as ofd:
         text = "\n".join([" ".join(["^^^"] + [c for c in w] + ["$$$"]) for w in words])
         ofd.write(text)
     return None

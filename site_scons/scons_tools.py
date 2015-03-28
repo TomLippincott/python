@@ -1,6 +1,6 @@
 from SCons.Node.Python import Value
 from SCons.Builder import Builder, BuilderBase
-from SCons.Action import Action, CommandGeneratorAction, FunctionAction
+from SCons.Action import Action, CommandGeneratorAction, FunctionAction, CommandAction
 from SCons.Subst import scons_subst
 import os.path
 from subprocess import Popen, PIPE, STDOUT
@@ -14,8 +14,9 @@ import logging
 import functools
 import tempfile
 
-def batch_key(self, env, target, source):
-    return tuple([s for s in source if not isinstance(s, Value)])
+#def batch_key(self, env, target, source):
+#    print str(self)
+#    return True #tuple([s for s in source if not isinstance(s, Value)])
 
 def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, data=None):
     """
@@ -86,20 +87,44 @@ def threaded_executor(env, commands):
     p.close()
     p.join()
     return None
+
+def same_builder_batch_key(self, env, target, source):
+    return self
+
+def same_sources_batch_key(self, env, target, source):
+    return (self, tuple([x for x in source if not isinstance(x, Value)]))
+
+def make_batch_builder(executor, builder, targets_per_job=1, sources_per_job=1, same_sources=False):    
+    def get_sets(env, target, source):
+        return (
+            [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)],
+            [source[i * sources_per_job : (i + 1) * sources_per_job] for i in range(len(source) / sources_per_job)]
+            )
+
+    def emitter(target, source, env):
+        #target_sets, source_sets = get_sets(env, target, source)
+        #print len(target_sets)
+        #print [(s.changed_since_last_build(target[-1], s.get_ninfo()), str(s)) for s in source]
+        return target, source
     
-def make_batch_builder(executor, builder, targets_per_job=1, sources_per_job=1):
     def threaded_print(target, source, env):
-        target_sets = [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)]
-        source_sets = [source[i * sources_per_job : (i + 1) * sources_per_job] for i in range(len(source) / sources_per_job)]
+        target_sets, source_sets = get_sets(env, target, source)
+        #= [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)]
+        #source_sets = [source[i * sources_per_job : (i + 1) * sources_per_job] for i in range(len(source) / sources_per_job)]
         if isinstance(builder.action, CommandGeneratorAction):
             inside = "\n\t".join([env.subst(builder.action.genstring(t, s, env), target=t, source=s) for t, s in zip(target_sets, source_sets)])
+        elif isinstance(builder.action, CommandAction):
+            inside = "\n\t".join([env.subst(builder.action.genstring(t, s, env), target=t, source=s) for t, s in zip(target_sets, source_sets)])            
         elif isinstance(builder.action, FunctionAction):
             inside = "\n\t".join([env.subst(builder.action.genstring(t, s, env).replace("target", "${TARGETS}").replace("source", "${SOURCES}"), target=t, source=s)
                                   for t, s in zip(target_sets, source_sets)])
+        else:
+            print type(builder.action)
         return "threaded(\n\t" + inside + "\n)"
     def run_builder(target, source, env):
-        targets = [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)]
-        sources = [source[i * sources_per_job : (i + 1) * sources_per_job] for i in range(len(source) / sources_per_job)]
+        targets, sources = get_sets(env, target, source)
+        #targets = [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)]
+        #sources = [source[i * sources_per_job : (i + 1) * sources_per_job] for i in range(len(source) / sources_per_job)]
         cmd = "scons -Q WORKER_NODE=True SCONSIGN_FILE=%s ${TARGET}"
         dbfiles = [tempfile.mkstemp(suffix=".dblite", dir="work/")[1] for i in range(len(targets))]
         with meta_open(".sconsign.dblite", "r", None) as ifd:
@@ -112,7 +137,10 @@ def make_batch_builder(executor, builder, targets_per_job=1, sources_per_job=1):
         for fname in dbfiles:
             os.remove(fname)
         return retval
-    return Builder(action=Action(run_builder, threaded_print, batch_key=batch_key))
+    if same_sources:
+        return Builder(action=Action(run_builder, threaded_print, batch_key=same_sources_batch_key), emitter=emitter)
+    else:
+        return Builder(action=Action(run_builder, threaded_print, batch_key=same_builder_batch_key), emitter=emitter)
 
 make_threaded_builder = functools.partial(make_batch_builder, threaded_executor)
 

@@ -2,6 +2,15 @@ from SCons.Builder import Builder
 from SCons.Action import Action
 from common_tools import meta_open, DataSet
 import re
+import unicodedata
+
+def graphemic_pronunciations(target, source, env):
+    with meta_open(source[0].rstr()) as ifd:
+        items = [x.strip() for x in ifd]
+    with meta_open(target[0].rstr(), "w") as ofd:
+        #ofd.write("\n".join(["%s\t%s" % (w, " ".join(["u%.4x" % (ord(c)) for c in w if c not in ["+", "-", unichr(1100), unichr(1098), ]])) for w in items]))
+        ofd.write("\n".join(["%s\t%s" % (w, " ".join(["u%.4x" % (ord(c)) for c in w if unicodedata.category(c)[0] == "L" and c not in [unichr(1100), unichr(1098)]])) for w in items]))
+    return None
 
 def segmented_pronunciations(target, source, env):
     sep = "+"
@@ -48,8 +57,13 @@ def pronunciations_to_vocab_dict(target, source, env):
                 try:
                     morph, num, prob = l.strip().split("\t")
                 except:
-                    pass
-                phones = "SIL"
+                    try:
+                        morph, phones = l.strip().split("\t")
+                        num = "1"
+                    except:
+                        morph = l.strip()
+                        phones = "SIL"
+                        num = "1"
             num = int(num) + 1
             prons["%s(%.2d)" % (morph, num)] = (morph, phones.split())
     with meta_open(target[0].rstr(), "w") as vocab_ofd, meta_open(target[1].rstr(), "w") as dict_ofd:
@@ -90,4 +104,5 @@ def TOOLS_ADD(env):
         "TrainG2P" : Builder(generator=train_g2p),
         "ApplyG2P" : Builder(action="PYTHONPATH=${G2P_PATH}:$${PYTHONPATH} ${G2P} -e utf-8 -m ${SOURCES[0]} -a ${SOURCES[1]} --variants-number=1 > ${TARGETS[0]}"),
         "PronunciationsToVocabDict" : Builder(action=pronunciations_to_vocab_dict),
+        "GraphemicPronunciations" : Builder(action=graphemic_pronunciations),
     })

@@ -53,14 +53,16 @@ def filter_by_emitter(target, source, env):
 
 def collect_text(target, source, env):
     pattern = re.compile(source[1].read())
-    discard = re.compile(r"^(\[.*\]|\<.*\>|\(.*\)|\*.*\*)\s*$")
+    #discard = re.compile(r"^(\[.*\]|\<.*\>|\(.*\)|\*.*\*)\s*$")
+    discard = re.compile(r"^(\[.*\]|\<.*\>|\(.*\))\s*$")
     keep = re.compile(r".*\w+.*", re.UNICODE)
     with tarfile.open(source[0].rstr()) as ifd, meta_open(target[0].rstr(), "w") as ofd:
         for name in ifd.getnames():
             if pattern.match(name):
-                for line in ifd.extractfile(name):
+                for line in codecs.decode(ifd.extractfile(name).read(), "utf-8").split("\n"):
                     if not discard.match(line):
-                        words = [word for word in line.strip().split() if not discard.match(word) and keep.match(word)]
+                        words = [word.strip("*") for word in line.strip().split() if not discard.match(word) and keep.match(word)]
+                        words = set([word for word in words if word != ""])
                     #words = [word for word in line.strip().split()]
                         if len(words) > 0:
                             ofd.write("%s\n" % (" ".join(words)))

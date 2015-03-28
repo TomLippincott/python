@@ -1,4 +1,5 @@
 from SCons.Builder import Builder
+import codecs
 import re
 from glob import glob
 from functools import partial
@@ -11,6 +12,7 @@ import numpy
 import math
 import xml.etree.ElementTree as et
 from morfessor import BaselineModel, MorfessorIO, get_default_argparser
+import tarfile
 
 def apply_morfessor(target, source, env):
     parser = get_default_argparser()
@@ -19,24 +21,33 @@ def apply_morfessor(target, source, env):
                      compound_separator=args.cseparator,
                      atom_separator=args.separator)
     model = io.read_binary_model_file(source[0].rstr())
+    words = []
     terms = {}
     for fname in source[1:]:
-        with meta_open(fname.rstr(), enc=None) as ifd:
-            for t in et.parse(ifd).getiterator("kw"):
-                text = list(t.getiterator("kwtext"))[0].text.lower()
-                words = text.strip().split()
-                kwid = t.get("kwid")
-                terms[kwid] = (text, [])
-                for w in words:
-                    toks, score = model.viterbi_segment(w)
-                    if len(toks) >= 2:
-                        toks = ["%s+" % toks[0]] + ["+%s+" % t for t in toks[1:-1]] + ["+%s" % toks[-1]]                        
-                    terms[kwid] = (text, terms[kwid][1] + toks)
-    lines = []
-    for i, (t, s) in terms.iteritems():
-        lines.append(" ".join(s))
+        try:
+            with meta_open(fname.rstr(), enc=None) as ifd:
+                for t in et.parse(ifd).getiterator("kw"):
+                    text = list(t.getiterator("kwtext"))[0].text.lower()
+                    words += text.strip().split()
+        except:
+            with meta_open(fname.rstr()) as ifd:
+                words = [l.strip() for l in ifd]
+    words = set(sum([w.strip("-").split("-") for w in words if "_" not in w], []))
+    #            kwid = t.get("kwid")
+    #            terms[kwid] = (text, [])
+    #            for w in words:
+    #
+    for w in words:
+        toks, score = model.viterbi_segment(w)
+        if len(toks) >= 2:
+            toks = ["%s+" % toks[0]] + ["+%s+" % t for t in toks[1:-1]] + ["+%s" % toks[-1]]
+        terms[w] = toks
+            #terms[kwid] = (text, terms[kwid][1] + toks)
+    #lines = []
+    #for i, (t, s) in terms.iteritems():
+    #    lines.append(" ".join(s))
     with meta_open(target[0].rstr(), "w") as ofd:
-        ofd.write(("\n".join(lines)))
+        ofd.write(("\n".join(sorted(["%s" % (" ".join(v)) for k, v in terms.iteritems()]))) + "\n")
     return None
 
 def train_morfessor(target, source, env):
@@ -56,16 +67,31 @@ def train_morfessor(target, source, env):
             for sentence in dataset.sentences:
                 for word_id, tag_id, analysis_ids in sentence:
                     word = dataset.indexToWord[word_id].lower()
-                    if regular_word(word):
-                        words[word] = words.get(word, 0) + 1
+                    #if regular_word(word):
+                    words[word] = words.get(word, 0) + 1
     except:
-        with meta_open(source[0].rstr()) as ifd:
-            for line in ifd:
-                for w in line.lower().split():
-                    if regular_word(w):
-                        words[w] = words.get(w, 0) + 1
+        try:
+            t = tarfile.open(source[0].rstr())
+            enc = "utf-8"
+            reader = codecs.getreader(enc)
+            ifd = reader(t.extractfile("syl.v2/vocab"))
+            for l in ifd:
+                w = l.strip().split()[0]
+                words[w] = 1
+        except:
+            with meta_open(source[0].rstr()) as ifd:
+                words = {l.strip() : 1 for l in ifd}
+
+            #with meta_open(source[0].rstr()) as ifd:
+            #for line in ifd:
+            #    w = line.strip().split()[-1]
+            #    words[w] = words.get(w, 0) + 1
+                #for w in line.lower().split():
+                    #if regular_word(w):
+                #    words[w] = words.get(w, 0) + 1
             #words = {w : int(n) for n, w in [x.strip().split() for x in ifd]}
-    model.load_data([(1, w, (w)) for w, c in words.iteritems()], args.freqthreshold, dampfunc, args.splitprob)
+    words = set(sum([w.strip("-").split("-") for w in words.keys() if "_" not in w], []))
+    model.load_data([(1, w, (w)) for w in words], args.freqthreshold, dampfunc, args.splitprob)
     algparams = ()
     develannots = None
     e, c = model.train_batch(args.algorithm, algparams, develannots,
@@ -85,9 +111,9 @@ def normalize_morfessor_output(target, source, env):
     with meta_open(source[0].rstr()) as ifd:
         for line in ifd:
             toks = line.strip().split()
-            segs.append(("".join([t.strip("+") for t in toks]), toks))
+            segs.append(("".join([x.strip("+") for x in toks]), toks))
     with meta_open(target[0].rstr(), "w") as ofd:
-        ofd.write("\n".join(["%s\t%s" % (w, " ".join(ts)) for w, ts in segs]))        
+        ofd.write("\n".join(["%s\t%s" % (w, " ".join(ts)) for w, ts in segs]) + "\n")        
     return None
 
 def morfessor_data_builder(target, source, env):    
@@ -142,11 +168,19 @@ def evaluate_morfessor(target, source, env):
 def asr_test(target, source, env):
     return None
 
+def unsegment(target, source, env):
+    with meta_open(source[0].rstr()) as ifd:
+        words = ["".join([x.strip("+") for x in l.strip().split()]) for l in ifd]
+    with meta_open(target[0].rstr(), "w") as ofd:
+        ofd.write("\n".join(words))
+    return None
+        
 def TOOLS_ADD(env):
     env.Append(BUILDERS = {
         "TrainMorfessor" : Builder(action=train_morfessor),
         "ApplyMorfessor" : Builder(action=apply_morfessor),
         "NormalizeMorfessorOutput" : Builder(action=normalize_morfessor_output),
+        "Unsegment" : Builder(action=unsegment),
         # 'MorfessorData' : Builder(action=morfessor_data_builder),
         # 'MorfessorRun' : Builder(generator=morfessor_run_generator),
         # 'MorfessorDisplayCounts' : Builder(generator=morfessor_display_counts_generator),
