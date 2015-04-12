@@ -58,7 +58,7 @@ def torque_executor(env, commands):
     return None
 
 
-make_torque_builder = functools.partial(make_batch_builder, torque_executor)
+make_torque_builder = functools.partial(make_batch_builder, torque_executor, name="torque")
 
 # def make_torque_builder(builder, targets_per_job=1, sources_per_job=1):
 #     def torque_print(target, source, env):

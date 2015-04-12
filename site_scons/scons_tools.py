@@ -94,7 +94,7 @@ def same_builder_batch_key(self, env, target, source):
 def same_sources_batch_key(self, env, target, source):
     return (self, tuple([x for x in source if not isinstance(x, Value)]))
 
-def make_batch_builder(executor, builder, targets_per_job=1, sources_per_job=1, same_sources=False):    
+def make_batch_builder(executor, builder, targets_per_job=1, sources_per_job=1, same_sources=False, name="batch"):    
     def get_sets(env, target, source):
         return (
             [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)],
@@ -107,7 +107,7 @@ def make_batch_builder(executor, builder, targets_per_job=1, sources_per_job=1, 
         #print [(s.changed_since_last_build(target[-1], s.get_ninfo()), str(s)) for s in source]
         return target, source
     
-    def threaded_print(target, source, env):
+    def batch_print(target, source, env):
         target_sets, source_sets = get_sets(env, target, source)
         #= [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)]
         #source_sets = [source[i * sources_per_job : (i + 1) * sources_per_job] for i in range(len(source) / sources_per_job)]
@@ -120,7 +120,7 @@ def make_batch_builder(executor, builder, targets_per_job=1, sources_per_job=1, 
                                   for t, s in zip(target_sets, source_sets)])
         else:
             print type(builder.action)
-        return "threaded(\n\t" + inside + "\n)"
+        return "%s(\n\t" % (name) + inside + "\n)"
     def run_builder(target, source, env):
         targets, sources = get_sets(env, target, source)
         #targets = [target[i * targets_per_job : (i + 1) * targets_per_job] for i in range(len(target) / targets_per_job)]
@@ -138,11 +138,11 @@ def make_batch_builder(executor, builder, targets_per_job=1, sources_per_job=1, 
             os.remove(fname)
         return retval
     if same_sources:
-        return Builder(action=Action(run_builder, threaded_print, batch_key=same_sources_batch_key), emitter=emitter)
+        return Builder(action=Action(run_builder, batch_print, batch_key=same_sources_batch_key), emitter=emitter)
     else:
-        return Builder(action=Action(run_builder, threaded_print, batch_key=same_builder_batch_key), emitter=emitter)
+        return Builder(action=Action(run_builder, batch_print, batch_key=same_builder_batch_key), emitter=emitter)
 
-make_threaded_builder = functools.partial(make_batch_builder, threaded_executor)
+make_threaded_builder = functools.partial(make_batch_builder, threaded_executor, name="threaded")
 
 def tar_member(target, source, env):
     pattern = env.subst(source[1].read())
@@ -159,6 +159,9 @@ def maybe(self, pattern):
     else:
         return r[0].rstr()
 
+def make_tar_builder(action):
+    pass
+    
 def TOOLS_ADD(env):
     BUILDERS = {"TarMember" : Builder(action=tar_member),
                 }

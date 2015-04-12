@@ -32,6 +32,8 @@ import lxml.etree as et
 def regular_word(w):
     return not any(w.endswith(x) for x in ["-", "*", ">", "~"]) and "(" not in w and "_" not in w
 
+def pairs(xs, n):
+    return [xs[i * n : (i + 1) * n] for i in range(len(xs) / n)]
 
 def parse_location(l):
     word_id = int(l.find("word").get("id"))
