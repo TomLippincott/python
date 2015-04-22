@@ -354,8 +354,8 @@ def normalize_pycfg_output(target, source, env):
     with meta_open(source[0].rstr()) as ifd:
         text = re.split(r"\n\s*?\n", ifd.read().strip())[-1]
         for line in text.split("\n"):
-            toks = tuple(["".join([y.group(1).replace(" ", "") for y in re.finditer("\(\S+ ([^\)\(]+)\)", x)]) for x in re.split(r"\(Prefix|\(Stem|\(Suffix", line)[1:]])
-            toks = tuple([t.replace("\\", "") for t in toks if len(t) > 0])
+            toks = tuple(["".join([unichr(int(y.group(1).replace(" ", ""), base=16)) for y in re.finditer("\(\S+ ([^\)\(]+)\)", x)]) for x in re.split(r"\(Prefix|\(Stem|\(Suffix", line)[1:]])
+            toks = tuple([t for t in toks if len(t) > 0])
             #toks = tuple(["".join([y.group(1) for y in re.finditer("\(\S+ ([^\)\(]+)\)", x)]) for x in re.split(r"\(Prefix|\(Stem|\(Suffix", line)[1:]])
             word = "".join(toks)
             if len(toks) > 1:
@@ -488,8 +488,10 @@ def extract_affixes(target, source, env):
             ofd.write("\n".join(["%d\t%s" % (c, a) for a, c in sorted(affixes.iteritems(), lambda x, y : cmp(y[1], x[1]))]))
     return None
 
+
 def character_productions(target, source, env):
     nag = [unichr(int(x, base=16)) for x in env.get("NON_ACOUSTIC_GRAPHEMES")]
+    nag = ["%.4x" % (ord(x)) for x in nag]
     characters = set()
     for f in source:
         #try:
@@ -503,12 +505,13 @@ def character_productions(target, source, env):
         with meta_open(f.rstr()) as ifd:
             for l in ifd:
                 for c in l:
-                    if not re.match(r"\s", c) and c not in nag:
+                    if not re.match(r"\s", c):
                         characters.add(c)
-                        for n in nag:
-                            characters.add("%s%s" % (n, c))
-                            characters.add("%s%s$" % (c, n))
+                        #for n in nag:
+                        #    characters.add("%s%s" % (n, c))
+                        #    characters.add("%s%s$" % (c, n))
     #print "W" in characters
+    characters = ["%.4x" % (ord(x)) for x in characters]
     with meta_open(target[0].rstr(), "w") as ofd:
         for c in characters:
             #ofd.write("0 1 Char --> %s\n" % (c.encode("utf-8")))
@@ -544,6 +547,7 @@ def morphology_data(target, source, env):
     #         else:                
     #             words = set(sum([l.split() for l in ifd], []))
     nag = [unichr(int(x, base=16)) for x in env.get("NON_ACOUSTIC_GRAPHEMES")]
+    nag = ["%.4x" % (ord(x)) for x in nag]
     words = set()
     with meta_open(source[0].rstr()) as ifd:
         for line in ifd:
@@ -553,7 +557,7 @@ def morphology_data(target, source, env):
                     if "_" not in word and "<" not in word:
                         words.add(word)
     with meta_open(target[0].rstr(), "w") as ofd:
-        text = "\n".join([" ".join(["^^^"] + [c for c in w] + ["$$$"]) for w in words])
+        text = "\n".join([" ".join(["^^^"] + ["%.4x" % (ord(c)) for c in w] + ["$$$"]) for w in words])
         ofd.write(text)
     return None
 
