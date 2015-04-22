@@ -355,7 +355,7 @@ def normalize_pycfg_output(target, source, env):
         text = re.split(r"\n\s*?\n", ifd.read().strip())[-1]
         for line in text.split("\n"):
             toks = tuple(["".join([y.group(1).replace(" ", "") for y in re.finditer("\(\S+ ([^\)\(]+)\)", x)]) for x in re.split(r"\(Prefix|\(Stem|\(Suffix", line)[1:]])
-            toks = tuple([t for t in toks if len(t) > 0])
+            toks = tuple([t.replace("\\", "") for t in toks if len(t) > 0])
             #toks = tuple(["".join([y.group(1) for y in re.finditer("\(\S+ ([^\)\(]+)\)", x)]) for x in re.split(r"\(Prefix|\(Stem|\(Suffix", line)[1:]])
             word = "".join(toks)
             if len(toks) > 1:
@@ -365,7 +365,8 @@ def normalize_pycfg_output(target, source, env):
     with meta_open(target[0].rstr(), "w") as ofd:
         for w, aa in sorted(analyses.iteritems()):
             #if re.match(r"^\w+$", w, re.UNICODE) and not re.match(r"^.*\d.*$", w):
-            ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s" % m for m in a if m != ""]) for a in set(aa)])))
+            #ofd.write("%s\t%s\n" % (w, ", ".join([" ".join(["%s" % m for m in a if m != ""]) for a in set(aa)])))
+            ofd.write("%s\n" % (" ".join(aa[0])))
     return None
 
 def collate_joint_output(target, source, env):
@@ -488,21 +489,25 @@ def extract_affixes(target, source, env):
     return None
 
 def character_productions(target, source, env):
+    nag = [unichr(int(x, base=16)) for x in env.get("NON_ACOUSTIC_GRAPHEMES")]
     characters = set()
     for f in source:
-        try:
-            with meta_open(f.rstr()) as ifd:
-                data = DataSet.from_stream(ifd)[0]
-                words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], [])] # if regular_word(word)]
+        #try:
+        #    with meta_open(f.rstr()) as ifd:
+        #        data = DataSet.from_stream(ifd)[0]
+        #        words = [word for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], [])] # if regular_word(word)]
                 #words = [w.lower() for w in words]
-                words = set(words)
-                characters = set(sum([[c for c in w] for w in words], []))
-        except:
-            with meta_open(f.rstr()) as ifd:
-                for l in ifd:
-                    for c in l:
-                        if not re.match(r"\s", c):
-                            characters.add(c.lower())
+        #        words = set(words)
+        #        characters = set(sum([[c for c in w] for w in words], []))
+        #except:
+        with meta_open(f.rstr()) as ifd:
+            for l in ifd:
+                for c in l:
+                    if not re.match(r"\s", c) and c not in nag:
+                        characters.add(c)
+                        for n in nag:
+                            characters.add("%s%s" % (n, c))
+                            characters.add("%s%s$" % (c, n))
     #print "W" in characters
     with meta_open(target[0].rstr(), "w") as ofd:
         for c in characters:
@@ -527,19 +532,27 @@ def compose_grammars(target, source, env):
     return None
 
 def morphology_data(target, source, env):
-    lc = source[1].read()
-    try:
-        with meta_open(source[0].rstr()) as ifd:
-            data = DataSet.from_stream(ifd)[0]
-            words = set([word.lower() for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)])
-    except:
-        with codecs.open(source[0].rstr(), "r", "utf-8") as ifd: #meta_open(source[0].rstr()) as ifd:
-            if lc:
-                words = set(sum([l.lower().split() for l in ifd], []))
-            else:                
-                words = set(sum([l.split() for l in ifd], []))
-    words = set(sum([w.strip("-").split("-") for w in words if "_" not in w], []))
-    with meta_open(target[0].rstr(), "w") as ofd: #meta_open(target[0].rstr(), "w") as ofd:
+    # lc = False #source[1].read()
+    # try:
+    #     with meta_open(source[0].rstr()) as ifd:
+    #         data = DataSet.from_stream(ifd)[0]
+    #         words = set([word.lower() for word in sum([[data.indexToWord[w] for w, t, aa in s] for s in data.sentences], []) if regular_word(word)])
+    # except:
+    #     with codecs.open(source[0].rstr(), "r", "utf-8") as ifd: #meta_open(source[0].rstr()) as ifd:
+    #         if lc:
+    #             words = set(sum([l.lower().split() for l in ifd], []))
+    #         else:                
+    #             words = set(sum([l.split() for l in ifd], []))
+    nag = [unichr(int(x, base=16)) for x in env.get("NON_ACOUSTIC_GRAPHEMES")]
+    words = set()
+    with meta_open(source[0].rstr()) as ifd:
+        for line in ifd:
+            toks = line.strip().split()
+            for tok in toks:
+                for word in tok.split("-"):
+                    if "_" not in word and "<" not in word:
+                        words.add(word)
+    with meta_open(target[0].rstr(), "w") as ofd:
         text = "\n".join([" ".join(["^^^"] + [c for c in w] + ["$$$"]) for w in words])
         ofd.write(text)
     return None
@@ -554,6 +567,8 @@ def pycfg_generator(target, source, env, for_signature):
         return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]} 2> /dev/null" % cat
     elif len(source) == 3:
         return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]} -u ${SOURCES[2]} -U 'tee > ${TARGETS[3]}' -x ${NUM_ITERATIONS} 2> /dev/null" % cat
+    elif len(source) == 4:
+        return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]} -u ${SOURCES[2]} -U 'tee > ${TARGETS[3]}' -v ${SOURCES[3]} -V 'tee > ${TARGETS[4]}' -x ${NUM_ITERATIONS} 2> /dev/null" % cat
     
 def pycfg_emitter(target, source, env):
     if len(target) == 1:

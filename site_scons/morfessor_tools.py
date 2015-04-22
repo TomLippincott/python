@@ -27,7 +27,7 @@ def apply_morfessor(target, source, env):
         try:
             with meta_open(fname.rstr(), enc=None) as ifd:
                 for t in et.parse(ifd).getiterator("kw"):
-                    text = list(t.getiterator("kwtext"))[0].text.lower()
+                    text = list(t.getiterator("kwtext"))[0].text
                     words += text.strip().split()
         except:
             with meta_open(fname.rstr()) as ifd:
@@ -54,50 +54,33 @@ def train_morfessor(target, source, env):
     parser = get_default_argparser()
     args = parser.parse_args([])
     dampfunc = lambda x : x
-    model = BaselineModel(forcesplit_list=[],
+    rx_str = "((\\S(%(ALT)s))|(^(%(ALT)s)\\S))" % {"ALT" : "|".join([unichr(int(x, base=16)) for x in env.get("NON_ACOUSTIC_GRAPHEMES")])}
+    model = BaselineModel(forcesplit_list=env.get("FORCE_SPLIT", []),
                           corpusweight=1.0,
-                          use_skips=False)
+                          use_skips=False,
+                          nosplit_re=rx_str)
     io = MorfessorIO(encoding=args.encoding,
                      compound_separator=args.cseparator,
                      atom_separator=args.separator)
     words = {}
-    try:
-        with meta_open(source[0].rstr()) as ifd:
-            dataset = DataSet.from_stream(ifd)[-1]
-            for sentence in dataset.sentences:
-                for word_id, tag_id, analysis_ids in sentence:
-                    word = dataset.indexToWord[word_id].lower()
-                    #if regular_word(word):
-                    words[word] = words.get(word, 0) + 1
-    except:
-        try:
-            t = tarfile.open(source[0].rstr())
-            enc = "utf-8"
-            reader = codecs.getreader(enc)
-            ifd = reader(t.extractfile("syl.v2/vocab"))
-            for l in ifd:
-                w = l.strip().split()[0]
-                words[w] = 1
-        except:
-            with meta_open(source[0].rstr()) as ifd:
-                words = {l.strip() : 1 for l in ifd}
+    with meta_open(source[0].rstr()) as ifd:
+        for line in ifd:
+            toks = line.strip().split()
+            for word in toks[0].split("-"):
+                if len(toks) == 1:
+                    words[word] = 1
+                elif len(toks) == 2:                
+                    words[word] = words.get(word, 0) + int(toks[1])
+                else:
+                    return "malformed vocabulary line: %s" % (line.strip())
 
-            #with meta_open(source[0].rstr()) as ifd:
-            #for line in ifd:
-            #    w = line.strip().split()[-1]
-            #    words[w] = words.get(w, 0) + 1
-                #for w in line.lower().split():
-                    #if regular_word(w):
-                #    words[w] = words.get(w, 0) + 1
-            #words = {w : int(n) for n, w in [x.strip().split() for x in ifd]}
-    words = set(sum([w.strip("-").split("-") for w in words.keys() if "_" not in w], []))
-    model.load_data([(1, w, (w)) for w in words], args.freqthreshold, dampfunc, args.splitprob)
+    words = {w : c for w, c in words.iteritems() if not re.match(env.get("NON_WORD_PATTERN", "^$"), w)}
+    #words = set(sum([w.strip("-").split("-") for w in words.keys() if "_" not in w], []))
+    model.load_data([(c, w, (w)) for w, c in words.iteritems()], args.freqthreshold, dampfunc, args.splitprob)
     algparams = ()
     develannots = None
     e, c = model.train_batch(args.algorithm, algparams, develannots,
                              args.finish_threshold, args.maxepochs)
-    
-    #d = DataSet.from_analyses([x for x in model.get_segmentations()])
     with meta_open(target[0].rstr(), "w") as ofd:
         for n, morphs in model.get_segmentations():
             if len(morphs) >= 2:
@@ -174,13 +157,39 @@ def unsegment(target, source, env):
     with meta_open(target[0].rstr(), "w") as ofd:
         ofd.write("\n".join(words))
     return None
-        
+
+def lines_to_vocabulary(target, source, env):
+    words = {}
+    with meta_open(source[0].rstr()) as ifd:
+        for line in ifd:
+            for word in line.strip().split():
+                words[word] = words.get(word, 0) + 1            
+    with meta_open(target[0].rstr(), "w") as ofd:
+        ofd.write("\n".join(["%s\t%d" % (w, c) for w, c in sorted(words.iteritems())]) + "\n")
+    return None
+
+# def morfessor_babel_experiment(env, target_base, training, non_acoustic, dev_keywords=None, eval_keywords=None):
+#     if env.get("RUN_SEGMENTATION", True):
+#         temp_segs, model = env.TrainMorfessor(["work/morfessor/%s.txt" % (target_base),
+#                                                "work/morfessor/%s.model" % (target_base)], training, NON_ACOUSTIC_GRAPHEMES=non_acoustic)
+#         segmented = [temp_segs]
+#         if dev_keywords:
+#             dev_kw_segs = env.ApplyMorfessor("work/morfessor/%s_dev_keywords.txt" % (target_base),
+#                                              [model, dev_keywords])
+#             segmented.append(dev_kw_segs)
+#         if eval_keywords:
+#             eval_kw_segs = env.ApplyMorfessor("work/morfessor/%s_eval_keywords.txt" % (target_base),
+#                                               [model, eval_keywords])
+#             segmented.append(eval_kw_segs)
+#     return segmented
+
 def TOOLS_ADD(env):
     env.Append(BUILDERS = {
         "TrainMorfessor" : Builder(action=train_morfessor),
         "ApplyMorfessor" : Builder(action=apply_morfessor),
         "NormalizeMorfessorOutput" : Builder(action=normalize_morfessor_output),
         "Unsegment" : Builder(action=unsegment),
+        "LinesToVocabulary" : Builder(action=lines_to_vocabulary),
         # 'MorfessorData' : Builder(action=morfessor_data_builder),
         # 'MorfessorRun' : Builder(generator=morfessor_run_generator),
         # 'MorfessorDisplayCounts' : Builder(generator=morfessor_display_counts_generator),
@@ -190,3 +199,4 @@ def TOOLS_ADD(env):
         # 'MorfessorEvaluateTags' : Builder(generator=morfessor_evaluate_tags),
         # 'MorfessorLatinGold' : Builder(action=morfessor_latin_gold),
     })
+
