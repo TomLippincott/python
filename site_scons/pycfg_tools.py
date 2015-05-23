@@ -12,6 +12,8 @@ from common_tools import meta_open, DataSet, v_measure, regular_word
 from itertools import product
 from subprocess import Popen, PIPE
 from scons_tools import make_generic_emitter, make_command_builder
+from nltk.parse.viterbi import ViterbiParser
+from nltk.grammar import PCFG, ProbabilisticProduction, Nonterminal
 
 def format_rules(rules):
     lines = []
@@ -581,6 +583,57 @@ def pycfg_emitter(target, source, env):
         new_target = target
     return new_target, source
 
+def apply_adaptor_grammar(target, source, env):
+    # PCFG, Production, ViterbiParser
+    rules = {}
+    nonterminals = set()
+    with meta_open(source[0].rstr()) as ifd:
+        for line in ifd:
+            m = re.match(r"^(\S+)\s(\S+) --> (.*)$", line)
+            if m:
+                count = float(m.group(1))
+                lhs = m.group(2)
+                nonterminals.add(lhs)
+                rhs = tuple(m.group(3).strip().split())
+                rules[lhs] = rules.get(lhs, {})
+                rules[lhs][rhs] = count
+            else:
+                m = re.match(r"^\((\S+)#\d+ (.*)$", line)
+                lhs = m.group(1)
+                rhs = tuple(re.sub(r"\(\S+", "", m.group(2)).replace(")", "").strip().split())
+                rules[lhs] = rules.get(lhs, {})
+                rules[lhs][rhs] = rules[lhs].get(rhs, 0) + 1
+    productions = []
+    for lhs, rhss in rules.iteritems():
+        total = sum(rhss.values())
+        for rhs, c in rhss.iteritems():
+            mrhs = []
+            for x in rhs:
+                if x in nonterminals:
+                    mrhs.append(Nonterminal(x))
+                else:
+                    mrhs.append(x)
+            productions.append(ProbabilisticProduction(Nonterminal(lhs), mrhs, prob=(float(c) / total)))
+    pcfg = PCFG(Nonterminal("Word"), productions)
+    parser = ViterbiParser(pcfg)
+    with meta_open(source[1].rstr()) as ifd:
+        items = [l.strip().split() for l in ifd]
+    with meta_open(target[0].rstr(), "w") as ofd:
+        parsed = parser.parse_sents(items)
+        for tree in [x.next() for x in parsed]:
+        #for word in items:
+            #try:
+                #tree = parser.parse(word).next()
+            toks = [z for z in ["".join([unichr(int(y, base=16)) for y in x.leaves() if y not in ["^^^", "$$$"]]) for x in tree] if z != ""]
+            if len(toks) == 1:
+                ofd.write("%s\n" % (toks[0]))
+            else:
+                ofd.write(" ".join(["%s+" % toks[0]] + ["+%s+" % x for x in toks[1:-1]] + ["+%s" % toks[-1]]) + "\n")
+            #except:
+            #    ofd.write("%s\n" % (word))
+    return None
+
+
 def TOOLS_ADD(env):
     #env["PYCFG_PATH"] = "/usr/local/py-cfg"
     env.Append(BUILDERS = {
@@ -613,6 +666,7 @@ def TOOLS_ADD(env):
         "TaggingOutputToDataset" : Builder(action=tagging_output_to_dataset),
         "EvaluateManyMorphology" : Builder(action=evaluate_many_morphology),
         "NormalizePYCFGOutput" : Builder(action=normalize_pycfg_output),
+        "ApplyAdaptorGrammar" : Builder(action=apply_adaptor_grammar),
     })
     pycfg_action = CommandGeneratorAction(pycfg_generator, {})
     pycfg_builder = Builder(action=pycfg_action, emitter=pycfg_emitter)

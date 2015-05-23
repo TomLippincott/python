@@ -31,7 +31,7 @@ def apply_morfessor(target, source, env):
                     words += text.strip().split()
         except:
             with meta_open(fname.rstr()) as ifd:
-                words = [l.strip() for l in ifd]
+                words = [l.strip().split()[0] for l in ifd]
     words = set(sum([w.strip("-").split("-") for w in words if "_" not in w], []))
     #            kwid = t.get("kwid")
     #            terms[kwid] = (text, [])
