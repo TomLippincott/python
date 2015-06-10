@@ -161,9 +161,18 @@ def maybe(self, pattern):
 
 def make_tar_builder(action):
     pass
-    
+
+def filter_tar(target, source, env):
+    pattern = env.subst(source[1].read())
+    with tarfile.open(target[0].rstr(), "w:gz") as otf:
+        with tarfile.open(source[0].rstr(), "r:gz") as itf:
+            for member in [m for m in itf.getmembers() if re.match(pattern, m.name)]:
+                otf.addfile(member, itf.extractfile(member))
+    return None
+
 def TOOLS_ADD(env):
     BUILDERS = {"TarMember" : Builder(action=tar_member),
-                }
+                "FilterTar" : Builder(action=filter_tar),
+            }
     env.Append(BUILDERS=BUILDERS)
     env.AddMethod(maybe)
