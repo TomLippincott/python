@@ -7,7 +7,7 @@ import logging
 import os.path
 import os
 import cPickle as pickle
-import numpy
+#import numpy
 import math
 import lxml.etree as et
 import xml.sax

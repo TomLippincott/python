@@ -8,7 +8,7 @@ import os.path
 import os
 from common_tools import meta_open, DataSet, regular_word
 import cPickle as pickle
-import numpy
+#import numpy
 import math
 import xml.etree.ElementTree as et
 from morfessor import BaselineModel, MorfessorIO, get_default_argparser

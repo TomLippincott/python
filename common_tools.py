@@ -18,10 +18,10 @@ from math import log, sqrt, pow, pi, e, sinh
 import tarfile
 import subprocess
 import shlex
-import numpy
-from scipy.special import gamma, gammainc
-from scipy import sparse
-from scipy.misc import comb
+#import numpy
+#from scipy.special import gamma, gammainc
+#from scipy import sparse
+#from scipy.misc import comb
 
 #from rpy2.robjects.conversion import ri2py
 #from rpy2.robjects.numpy2ri import numpy2ri

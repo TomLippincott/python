@@ -23,10 +23,10 @@ import bisect
 from babel import ProbabilityList, Arpabo, Pronunciations, Vocabulary, FrequencyList
 from common_tools import Probability, temp_file, meta_open
 from os.path import join as pjoin
-import matplotlib
-matplotlib.use("Agg")
-from matplotlib import pyplot
-import numpy
+#import matplotlib
+#matplotlib.use("Agg")
+#from matplotlib import pyplot
+#import numpy
 import tarfile
 
 """
