@@ -12,7 +12,7 @@ import math
 import tempfile
 import shutil
 import contextlib
-#import bz2
+import bz2
 from os.path import basename, splitext
 from math import log, sqrt, pow, pi, e, sinh
 import tarfile
@@ -27,7 +27,10 @@ import shlex
 #from rpy2.robjects.numpy2ri import numpy2ri
 from unicodedata import name
 import logging
-import lxml.etree as et
+try:
+    import lxml.etree as et
+except:
+    import xml.etree.ElementTree as et
 
 def regular_word(w):
     return not any(w.endswith(x) for x in ["-", "*", ">", "~"]) and "(" not in w and "_" not in w
@@ -470,6 +473,8 @@ def meta_open(fname, mode="r", enc="utf-8"):
         return tarfile.open(fname, "%s:gz" % mode)
     elif fname.endswith(".tbz2"):
         return tarfile.open(fname, "%s:bz2" % mode)
+    elif fname.endswith(".tar"):
+        return tarfile.open(fname, "%s" % mode)
     elif fname.endswith(".gz"):
         g = gzip.open(fname, mode)
         if enc:
