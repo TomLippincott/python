@@ -41,7 +41,7 @@ def torque_executor(env, commands):
         stdout = env.subst("${TORQUE_LOG}/")
         stderr = env.subst("${TORQUE_LOG}/")
         job = torque.Job(args.get("name", "scons"),
-                         commands=["source /vega/ccls/users/tml2115/projects/bashrc.txt", env.subst(cmd)],
+                         commands=[env.subst("source ${BASHRC_TXT}"), env.subst(cmd)],
                          resources=resources,
                          path=args.get("path", os.getcwd()),
                          stdout_path=stdout,
