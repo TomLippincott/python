@@ -21,10 +21,14 @@ def segmented_pronunciations(target, source, env):
     with meta_open(source[0].rstr()) as pron_fd, meta_open(source[1].rstr()) as seg_fd:
         for l in pron_fd:
             word, pron = re.match(r"^(\S+)\(\d+\) (.*)$", l.strip().replace(" [ wb ]", "")).groups()
+            if env.get("LOWER_CASE"):
+                word = word.lower()
             data[word] = data.get(word, []) + [pron]
             #w2s = {"".join(ms) : sep.join(ms) for ms in 
         #d = DataSet.from_stream(seg_fd)
         vals = [[y.strip(sep) for y in x.split()] for x in seg_fd]
+        if env.get("LOWER_CASE"):
+            vals = [[y.lower() for y in x] for x in vals]
         segs = {sep.join(x) : x for x in vals}
         w2s = {"".join(x) : sep.join(x) for x in vals} #d[0].indexToAnalysis.values()}
         for m in segs.values():
