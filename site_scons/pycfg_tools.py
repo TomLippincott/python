@@ -556,7 +556,7 @@ def morphology_data(target, source, env):
             toks = line.strip().split()
             for tok in toks:
                 for word in tok.split("-"):
-                    if "_" not in word and "<" not in word:
+                    if "_" not in word and "<" not in word and len(word) > 0:
                         words.add(word)
     with meta_open(target[0].rstr(), "w") as ofd:
         text = "\n".join([" ".join(["^^^"] + ["%.4x" % (ord(c)) for c in w] + ["$$$"]) for w in words])
