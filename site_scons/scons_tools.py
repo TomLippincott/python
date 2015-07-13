@@ -14,9 +14,6 @@ import logging
 import functools
 import tempfile
 
-#def batch_key(self, env, target, source):
-#    print str(self)
-#    return True #tuple([s for s in source if not isinstance(s, Value)])
 
 def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, data=None):
     """
@@ -32,8 +29,10 @@ def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stde
         out, err = process.communicate()
     return out, err, process.returncode == 0
 
+
 def strip_file(f):
     return os.path.splitext(os.path.basename(f))[0]
+
 
 def make_generic_emitter(targets):
     def emitter(target, source, env):
@@ -52,6 +51,7 @@ def make_generic_emitter(targets):
         return targets, source
     return emitter
 
+
 def make_command_builder(command, targets, arg_names, directory):
     def generator(target, source, env, for_signature):
         args = source[-1].read()
@@ -63,6 +63,7 @@ def make_command_builder(command, targets, arg_names, directory):
         return new_target, source
     return Builder(generator=generator, emitter=emitter)
 
+
 class ThreadedBuilder(BuilderBase):
     def __init__(self, action):
         print action
@@ -71,15 +72,18 @@ class ThreadedBuilder(BuilderBase):
         print env.subst(target)
         pass
 
+
 def threaded_run(target, source, env):
     cmd = env.subst("scons -Q THREADED_SUBMIT_NODE=False THREADED_WORKER_NODE=True TORQUE_SUBMIT_NODE=False TORQUE_WORKER_NODE=False ${TARGET}", target=target, source=source)
     pid = Popen(shlex.split(cmd))
     pid.communicate()
     return None
 
+
 def call(x):
     subprocess.call(x.split())
 
+    
 def threaded_executor(env, commands):
     p = Pool(3)
     for cmd in commands:
@@ -88,11 +92,14 @@ def threaded_executor(env, commands):
     p.join()
     return None
 
+
 def same_builder_batch_key(self, env, target, source):
     return self
 
+
 def same_sources_batch_key(self, env, target, source):
     return (self, tuple([x for x in source if not isinstance(x, Value)]))
+
 
 def make_batch_builder(executor, builder, targets_per_job=1, sources_per_job=1, same_sources=False, name="batch"):    
     def get_sets(env, target, source):
@@ -142,7 +149,9 @@ def make_batch_builder(executor, builder, targets_per_job=1, sources_per_job=1, 
     else:
         return Builder(action=Action(run_builder, batch_print, batch_key=same_builder_batch_key), emitter=emitter)
 
+
 make_threaded_builder = functools.partial(make_batch_builder, threaded_executor, name="threaded")
+
 
 def tar_member(target, source, env):
     pattern = env.subst(source[1].read())
@@ -152,6 +161,7 @@ def tar_member(target, source, env):
                 ofd.write(tf.extractfile(name).read())
     return None
 
+
 def maybe(self, pattern):
     r = self.Glob(pattern)
     if len(r) == 0:
@@ -159,8 +169,10 @@ def maybe(self, pattern):
     else:
         return r[0].rstr()
 
+
 def make_tar_builder(action):
     pass
+
 
 def filter_tar(target, source, env):
     pattern = env.subst(source[1].read())
@@ -170,9 +182,9 @@ def filter_tar(target, source, env):
                 otf.addfile(member, itf.extractfile(member))
     return None
 
+
 def TOOLS_ADD(env):
-    BUILDERS = {"TarMember" : Builder(action=tar_member),
-                "FilterTar" : Builder(action=filter_tar),
-            }
-    env.Append(BUILDERS=BUILDERS)
+    env.Append(BUILDERS = {"TarMember" : Builder(action=tar_member),
+                           "FilterTar" : Builder(action=filter_tar),
+    })
     env.AddMethod(maybe)

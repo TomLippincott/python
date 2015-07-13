@@ -35,6 +35,11 @@ except:
 def regular_word(w):
     return not any(w.endswith(x) for x in ["-", "*", ">", "~"]) and "(" not in w and "_" not in w
 
+
+def list_to_tuples(xs, n=2):    
+    return [[xs[i * n + j] for j in range(n)] for i in range(len(xs) / n)]
+
+
 def pairs(xs, n):
     return [xs[i * n : (i + 1) * n] for i in range(len(xs) / n)]
 
