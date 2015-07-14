@@ -122,11 +122,10 @@ def morphology_data(target, source, env):
     words = set()
     with meta_open(source[0].rstr()) as ifd:
         for line in ifd:
-            toks = line.strip().split()
-            for tok in toks:
-                for word in tok.split("-"):
-                    if "_" not in word and "<" not in word and len(word) > 0:
-                        words.add(word)
+            tok = line.strip().split()[0]
+            for word in tok.split("-"):
+                if "_" not in word and "<" not in word and len(word) > 0:
+                    words.add(word)
     with meta_open(target[0].rstr(), "w") as ofd:
         text = "\n".join([" ".join(["^^^"] + ["%.4x" % (ord(c)) for c in w] + ["$$$"]) for w in words])
         ofd.write(text)
