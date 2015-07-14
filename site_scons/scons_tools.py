@@ -8,7 +8,7 @@ from multiprocessing import Pool
 import subprocess
 import shlex
 import tarfile
-from common_tools import meta_open, temp_file
+from common_tools import meta_open, temp_file, strip_file
 import re
 import logging
 import functools
@@ -16,9 +16,7 @@ import tempfile
 
 
 def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, data=None):
-    """
-    Simple convenience wrapper for running commands (not an actual Builder).
-    """
+    """Simple convenience wrapper for running commands (not an actual Builder)."""
     if isinstance(cmd, basestring):
         cmd = shlex.split(cmd)
     logging.debug("Running command: %s", " ".join(cmd))
@@ -28,10 +26,6 @@ def run_command(cmd, env={}, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stde
     else:
         out, err = process.communicate()
     return out, err, process.returncode == 0
-
-
-def strip_file(f):
-    return os.path.splitext(os.path.basename(f))[0]
 
 
 def make_generic_emitter(targets):

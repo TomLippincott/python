@@ -32,6 +32,11 @@ try:
 except:
     import xml.etree.ElementTree as et
 
+
+def strip_file(f):
+    return os.path.splitext(os.path.basename(f))[0]
+
+    
 def regular_word(w):
     return not any(w.endswith(x) for x in ["-", "*", ">", "~"]) and "(" not in w and "_" not in w
 

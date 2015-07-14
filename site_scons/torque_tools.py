@@ -31,6 +31,7 @@ import functools
 
 
 def torque_executor(env, commands):
+    """Runs a list of commands as separate Torque jobs using environment variables."""
     args = {}
     running = []
     resources = {
@@ -59,4 +60,5 @@ def torque_executor(env, commands):
     return None
 
 
+# A function that creates batch builders using Torque as the underlying execution mechanism
 make_torque_builder = functools.partial(make_batch_builder, torque_executor, name="torque")

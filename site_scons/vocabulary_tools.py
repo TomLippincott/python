@@ -23,15 +23,8 @@ import bisect
 from babel import ProbabilityList, Arpabo, Pronunciations, Vocabulary, FrequencyList
 from common_tools import Probability, temp_file, meta_open
 from os.path import join as pjoin
-#import matplotlib
-#matplotlib.use("Agg")
-#from matplotlib import pyplot
-#import numpy
 import tarfile
 
-"""
-file conventions: text.gz, vocabulary.gz, probabilities.gz, language_model.gz, pronunciations.gz, frequencies.gz
-"""
 
 def filter_by(target, source, env):
     """
@@ -64,6 +57,7 @@ def text_to_vocabulary(target, source, env):
         ofd.write(vocab.format())
     return None
 
+
 def probability_list_to_vocabulary(target, source, env):
     with meta_open(source[0].rstr()) as ifd:
         probs = ProbabilityList(ifd)
@@ -72,10 +66,11 @@ def probability_list_to_vocabulary(target, source, env):
         ofd.write(vocab.format())
     return None
 
+
 def TOOLS_ADD(env):
+    """Conventional way to add builders to an SCons environment."""
     env.Append(BUILDERS = {"FilterBy" : Builder(action=filter_by, emitter=filter_by_emitter),
                            "TextToVocabulary" : Builder(action=text_to_vocabulary),
                            "ProbabilityListToVocabulary" : Builder(action=probability_list_to_vocabulary), #ensure_suffix=True, suffix="vocabulary.gz"),
                            }
                )
-        

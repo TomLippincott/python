@@ -4,15 +4,26 @@ from common_tools import meta_open, DataSet
 import re
 import unicodedata
 
+
 def graphemic_pronunciations(target, source, env):
+    """Convert a list of words into a list of graphemic pronunciations.
+
+    Sources: word list file
+    Targets: graphemic pronunciation file
+    """
     with meta_open(source[0].rstr()) as ifd:
         items = [x.strip() for x in ifd]
     with meta_open(target[0].rstr(), "w") as ofd:
-        #ofd.write("\n".join(["%s\t%s" % (w, " ".join(["u%.4x" % (ord(c)) for c in w if c not in ["+", "-", unichr(1100), unichr(1098), ]])) for w in items]))
         ofd.write("\n".join(["%s\t%s" % (w, " ".join(["u%.4x" % (ord(c)) for c in w if unicodedata.category(c)[0] == "L" and c not in [unichr(1100), unichr(1098)]])) for w in items]))
     return None
 
+
 def segmented_pronunciations(target, source, env):
+    """Takes a word pronunciation file and a word segmentation file and creates a "segmented word pronunciation file" suitable for training G2P
+
+    Sources: pronunciation file, word segmentation file
+    Targets: word pronunciation, morph list file
+    """
     sep = "+"
     data = {}
     segs = {}
@@ -24,13 +35,11 @@ def segmented_pronunciations(target, source, env):
             if env.get("LOWER_CASE"):
                 word = word.lower()
             data[word] = data.get(word, []) + [pron]
-            #w2s = {"".join(ms) : sep.join(ms) for ms in 
-        #d = DataSet.from_stream(seg_fd)
         vals = [[y.strip(sep) for y in x.split()] for x in seg_fd]
         if env.get("LOWER_CASE"):
             vals = [[y.lower() for y in x] for x in vals]
         segs = {sep.join(x) : x for x in vals}
-        w2s = {"".join(x) : sep.join(x) for x in vals} #d[0].indexToAnalysis.values()}
+        w2s = {"".join(x) : sep.join(x) for x in vals}
         for m in segs.values():
             if len(m) == 1:
                 morphs.add(m[0])
@@ -40,17 +49,29 @@ def segmented_pronunciations(target, source, env):
                 for x in m[1:-1]:
                     morphs.add("%s%s%s" % (sep, x, sep))
     with meta_open(target[0].rstr(), "w") as seg_ofd, meta_open(target[1].rstr(), "w") as morph_ofd:
-        morph_ofd.write("\n".join(morphs))
         seg_ofd.write("\n".join(sum([["%s %s" % (w2s.get(k, k), p) for p in v] for k, v in data.iteritems()], [])))
+        morph_ofd.write("\n".join(morphs))
     return None
 
+
 def train_g2p(target, source, env, for_signature):
+    """Train a G2P model, or ramp up an existing model, from training data of known aligned grapheme and phoneme sequences.
+
+    Sources: (existing model file for ramp-up,) aligned training file
+    Targets: trained model file
+    """
     if len(source) == 1:
         return "PYTHONPATH=${G2P_PATH}:$${PYTHONPATH} ${G2P} -e utf-8 -t ${SOURCES[0]} -n ${TARGETS[0]}"
     elif len(source) == 2:
         return "PYTHONPATH=${G2P_PATH}:$${PYTHONPATH} ${G2P} -e utf-8 -m ${SOURCES[0]} --ramp-up -t ${SOURCES[1]} -n ${TARGETS[0]}"
 
+    
 def pronunciations_to_vocab_dict(target, source, env):
+    """Convert a pronunciation file to a vocabulary file (IBM format).
+
+    Sources: pronunciation file, boolean
+    Targets: vocabulary file
+    """
     graphemic = source[-1].read()
     prons = {}
     with meta_open(source[0].rstr()) as ifd:
@@ -102,11 +123,21 @@ def pronunciations_to_vocab_dict(target, source, env):
 """)
     return None
 
+
+def apply_g2p(target, source, env, for_signature):
+    """Apply a G2P file to a list of words.
+
+    Sources: G2P model file, word list file
+    Targets: pronunciations file
+    """
+    return "PYTHONPATH=${G2P_PATH}:$${PYTHONPATH} ${G2P} -e utf-8 -m ${SOURCES[0]} -a ${SOURCES[1]} --variants-number=1 > ${TARGETS[0]}"
+
+
 def TOOLS_ADD(env):
     env.Append(BUILDERS = {
         "SegmentedPronunciations" : Builder(action=segmented_pronunciations),
         "TrainG2P" : Builder(generator=train_g2p),
-        "ApplyG2P" : Builder(action="PYTHONPATH=${G2P_PATH}:$${PYTHONPATH} ${G2P} -e utf-8 -m ${SOURCES[0]} -a ${SOURCES[1]} --variants-number=1 > ${TARGETS[0]}"),
+        "ApplyG2P" : Builder(generator=apply_g2p),
         "PronunciationsToVocabDict" : Builder(action=pronunciations_to_vocab_dict),
         "GraphemicPronunciations" : Builder(action=graphemic_pronunciations),
     })

@@ -17,7 +17,11 @@ from nltk.grammar import PCFG, ProbabilisticProduction, Nonterminal
 
 
 def format_rules(rules):
-    """Utility function to convert a list of rules into a string that can be written as an input grammar file for py-cfg."""
+    """Utility function to convert a list of rules into a string that can be written as an input grammar file for py-cfg.
+
+    Inputs: list of tuples representing py-cfg rules
+    Outputs: py-cfg-formatted grammar
+    """
     lines = []
     for rule in rules:
         targets = " ".join(rule[-1])
@@ -31,10 +35,10 @@ def format_rules(rules):
 
 
 def normalize_pycfg_output(target, source, env):
-    """
+    """Turns py-cfg parsed output into something more human-readable.
 
-    Sources:
-    Targets:
+    Sources: segmented py-cfg output file
+    Targets: reformatted segmentations file
     """
     analyses = {}
     with meta_open(source[0].rstr()) as ifd:
@@ -56,10 +60,11 @@ def normalize_pycfg_output(target, source, env):
 def character_productions(target, source, env):
     """Creates the portion of a grammar that handles the terminal character productions.
 
-    Includes every non-whitespace character in the input file, except for the specified non-acoustic graphemes.
+    Covers every non-whitespace character in the input file, except for the specified non-acoustic graphemes.
+    Basically, just creates rules like "Char --> 'a'", "Char --> 'b'", etc.
 
-    Sources:
-    Targets:
+    Sources: word list 1, word list 2, ...
+    Targets: character grammar fragment
     """
     nag = [unichr(int(x, base=16)) for x in env.get("NON_ACOUSTIC_GRAPHEMES")]
     nag = ["%.4x" % (ord(x)) for x in nag]
@@ -80,8 +85,11 @@ def character_productions(target, source, env):
 def compose_grammars(target, source, env):
     """Combine grammar fragments into a single grammar.
 
-    Sources:
-    Targets:
+    Right now this is just concatenation without even validation, but the door is open
+    to much fancier techniques.
+
+    Sources: fragment file 1, fragment file 2 ...
+    Targets: composed grammar file
     """
     with meta_open(target[0].rstr(), "w") as ofd:
         for s in source:
@@ -102,8 +110,12 @@ def compose_grammars(target, source, env):
 def morphology_data(target, source, env):
     """Converts a list of words into the py-cfg data format.
 
-    Sources:
-    Targets:
+    The input to py-cfg morphological models is each word as a sequence of space-separated graphemes,
+    with special start ("^^^") and end ("$$$") symbols, one word per line.  Graphemes with no
+    acoustic realizations (according to IBM) are ignored.
+
+    Sources: word list file
+    Targets: py-cfg data file
     """
     nag = [unichr(int(x, base=16)) for x in env.get("NON_ACOUSTIC_GRAPHEMES")]
     nag = ["%.4x" % (ord(x)) for x in nag]
@@ -120,11 +132,12 @@ def morphology_data(target, source, env):
         ofd.write(text)
     return None
 
-def pycfg_generator(target, source, env, for_signature):
-    """
 
-    Sources:
-    Targets:
+def pycfg_generator(target, source, env, for_signature):
+    """Runs an appropriate command-line invocation of py-cfg based on the sources and variables.
+
+    Sources: py-cfg input grammar, py-cfg input data
+    Targets: parsed data file, trained py-cfg model, debugging trace file
     """
     if source[1].rstr().endswith("gz"):
         cat = "zcat"
@@ -141,8 +154,14 @@ def pycfg_generator(target, source, env, for_signature):
 def apply_adaptor_grammar(target, source, env):
     """Apply an existing adaptor grammar model to new data.
 
-    Sources:
-    Targets:
+    One of py-cfg's outputs is essentially a PCFG: this builder formats this a bit, then
+    loads it as an NLTK PCFG, which is then applied to the provided word list to get new
+    segmentations.  Note: the NLTK implementation is very slow, you may want to look into
+    using one of Mark Johnson's other code bases, "cky.tbz", which is very fast and accepts
+    a similar format to the py-cfg output.
+
+    Sources: py-cfg grammar file, word list
+    Targets: segmented word list
     """
     rules = {}
     nonterminals = set()
