@@ -27,7 +27,10 @@ def train_morfessor(target, source, env):
     parser = get_default_argparser()
     args = parser.parse_args([])
     dampfunc = lambda x : x
-    rx_str = "((\\S(%(ALT)s))|(^(%(ALT)s)\\S))" % {"ALT" : "|".join([unichr(int(x, base=16)) for x in env.get("NON_ACOUSTIC_GRAPHEMES")])}
+    if len(env.get("NON_ACOUSTIC_GRAPHEMES", [])) > 0:
+        rx_str = "((\\S(%(ALT)s))|(^(%(ALT)s)\\S))" % {"ALT" : "|".join([unichr(int(x, base=16)) for x in env.get("NON_ACOUSTIC_GRAPHEMES")])}
+    else:
+        rx_str = None
     model = BaselineModel(forcesplit_list=env.get("FORCE_SPLIT", []),
                           corpusweight=1.0,
                           use_skips=False,

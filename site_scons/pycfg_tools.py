@@ -143,11 +143,11 @@ def pycfg_generator(target, source, env, for_signature):
     else:
         cat = "cat"
     if len(source) == 2:
-        return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]} 2> /dev/null" % cat
+        return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]} ${COMMAND_LINE_SUFFIX}" % cat
     elif len(source) == 3:
-        return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]} -u ${SOURCES[2]} -U 'tee > ${TARGETS[3]}' -x ${NUM_ITERATIONS} 2> /dev/null" % cat
+        return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]} -u ${SOURCES[2]} -U 'tee > ${TARGETS[3]}' -x ${NUM_ITERATIONS} ${COMMAND_LINE_SUFFIX}" % cat
     elif len(source) == 4:
-        return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]} -u ${SOURCES[2]} -U 'tee > ${TARGETS[3]}' -v ${SOURCES[3]} -V 'tee > ${TARGETS[4]}' -x ${NUM_ITERATIONS} 2> /dev/null" % cat
+        return "%s ${SOURCES[1]}|${PYCFG_PATH}/py-cfg ${SOURCES[0]} -w 0.1 -N ${NUM_SAMPLES} -d 100 -E -n ${NUM_ITERATIONS} -e 1 -f 1 -g 10 -h 0.1 -T ${ANNEAL_INITIAL} -t ${ANNEAL_FINAL} -m ${ANNEAL_ITERATIONS} -A ${TARGETS[0]} -G ${TARGETS[1]} -F ${TARGETS[2]} -u ${SOURCES[2]} -U 'tee > ${TARGETS[3]}' -v ${SOURCES[3]} -V 'tee > ${TARGETS[4]}' -x ${NUM_ITERATIONS} ${COMMAND_LINE_SUFFIX}" % cat
 
 
 def apply_adaptor_grammar(target, source, env):

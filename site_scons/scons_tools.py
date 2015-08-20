@@ -158,7 +158,7 @@ def tar_member(target, source, env):
 
 def maybe(self, pattern):
     r = self.Glob(pattern)
-    if len(r) == 0:
+    if len(r) != 1:
         return None
     else:
         return r[0].rstr()
