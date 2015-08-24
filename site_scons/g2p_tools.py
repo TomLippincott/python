@@ -69,8 +69,8 @@ def train_g2p(target, source, env, for_signature):
 def pronunciations_to_vocab_dict(target, source, env):
     """Convert a pronunciation file to a vocabulary file (IBM format).
 
-    Sources: pronunciation file, boolean
-    Targets: vocabulary file
+    Sources: pronunciation file, dictionary_file, boolean
+    Targets: vocabulary file, pronunciations_file
     """
     graphemic = source[-1].read()
     prons = {}
@@ -93,6 +93,7 @@ def pronunciations_to_vocab_dict(target, source, env):
             prons["%s(%.2d)" % (morph, num)] = (morph, phones.split())
     with meta_open(target[0].rstr(), "w") as vocab_ofd, meta_open(target[1].rstr(), "w") as dict_ofd:
         wb = ["[", "wb", "]"]
+        wb = []
         for w, (m, p) in prons.iteritems():
             if not graphemic:
                 if len(p) == 1:
@@ -115,11 +116,11 @@ def pronunciations_to_vocab_dict(target, source, env):
 ~SIL(03) VN
 """)
         else:
-            dict_ofd.write("""<s>(01) SIL [ wb ]
-</s>(01) SIL [ wb ]
-~SIL(01) SIL [ wb ]
-~SIL(02) NS [ wb ]
-~SIL(03) VN [ wb ]
+            dict_ofd.write("""<s>(01) SIL
+</s>(01) SIL
+~SIL(01) SIL
+~SIL(02) NS
+~SIL(03) VN
 """)
     return None
 

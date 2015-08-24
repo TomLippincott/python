@@ -164,6 +164,24 @@ def maybe(self, pattern):
         return r[0].rstr()
 
 
+def one_file(self, pattern):
+    r = self.Glob(pattern)
+    if len(r) == 0:
+        self.Exit("pattern '%s' matched no files")
+    elif len(r) == 1:
+        return r[0]
+    else:
+        self.Exit("pattern '%s' matched more than one file")
+
+
+def files(self, pattern):
+    r = self.Glob(pattern)
+    if len(r) == 0:
+        self.Exit("pattern '%s' matched no files")
+    else:
+        return r
+
+
 def make_tar_builder(action):
     pass
 
@@ -182,3 +200,5 @@ def TOOLS_ADD(env):
                            "FilterTar" : Builder(action=filter_tar),
     })
     env.AddMethod(maybe)
+    env.AddMethod(one_file)
+    env.AddMethod(files)
